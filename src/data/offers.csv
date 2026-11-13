@@ -1,0 +1,5 @@
+offer_id,code,title,discount_pct,applies_to,valid_from,valid_to,max_discount_inr,status
+OFF-01,WINTER20,Winter Launch 20% Off,20,GV-SER-30,2026-11-20,2026-11-30,200,active
+OFF-02,WELCOME10,First Order Discount,10,ALL,2026-11-01,2026-12-31,100,active
+OFF-03,BUNDLE999,Hydra Bundle Deal,0,GV-SER-30 + GV-CLN-100,2026-11-20,2026-11-27,0,active
+OFF-04,DIWALI15,Diwali Glow Special,15,ALL,2026-10-25,2026-11-10,300,expired

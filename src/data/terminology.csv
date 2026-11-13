@@ -1,0 +1,8 @@
+term_id,term,category,replacement,reason,rule_ref
+T-01,Night Renew Cream,retired,Hydra Glow Serum,Product rebranded and replaced in Q3 2026,Naming 4.1
+T-02,miracle,banned,effective,Overpromising and unscientific claim,Claims 3.2
+T-03,fairness / fair skin,banned,bright / radiant skin,Discriminatory / anti-colourism policy,Tone 1.2
+T-04,cure / cures,banned,helps manage / soothes,Cosmetics cannot claim medical cures,Claims 3.2
+T-05,chemical-free,banned,gentle formula / plant-derived,Scientific inaccuracy (water is a chemical),Claims 3.2
+T-06,instant whitening,banned,instant hydration / glowing finish,Prohibited under brand ethics,Tone 1.2
+T-07,cheapest,banned,accessible / great value,Lowers brand perception,Tone 1.1

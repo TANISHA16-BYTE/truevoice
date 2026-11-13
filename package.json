@@ -1,0 +1,23 @@
+{
+  "name": "truevoice-backend",
+  "version": "1.0.0",
+  "description": "TrueVoice: Content Safety Check & Verification API before publication",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node src/db/seed.js",
+    "test": "node tests/api.test.js",
+    "benchmark": "node tests/benchmark_40_sentences.js"
+  },
+  "keywords": [
+    "truevoice",
+    "content-safety",
+    "compliance",
+    "hackathon",
+    "gemini",
+    "devvibe"
+  ],
+  "author": "Tanisha Jain (Backend Lead, Team DevVibe)",
+  "license": "MIT"
+}

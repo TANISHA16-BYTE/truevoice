@@ -1,0 +1,4 @@
+price_id,product_code,product_name,current_price_inr,old_price_inr,effective_date,source_id
+PR-01,GV-SER-30,Hydra Glow Serum,799,899,2026-11-01,S-04
+PR-02,GV-SPF-50,Daily Shield Sunscreen,549,499,2026-11-01,S-04
+PR-03,GV-CLN-100,Gentle Foam Cleanser,399,399,2026-11-01,S-04

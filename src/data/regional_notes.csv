@@ -1,0 +1,6 @@
+id,phrase,meaning,context,allowed,suggested_action,notes
+RN-01,Gora nikhaar,Fair glow,Colorist phrase,false,Replace with 'Khilta nikhaar' or 'Glowing skin',Banned under inclusive tone policy
+RN-02,Dhamaka offer,Huge / blockbuster deal,Hinglish colloquialism,true,Allow (common festive marketing term),Safe festive slang in North India
+RN-03,Chamakdar twacha,Radiant skin,Hindi translation,true,Allow as approved vernacular copy,Accurate translation of glowing skin
+RN-04,Zabardast discount,Tremendous discount,Colloquial Hindi,true,Allow if accompanied by exact verified percentage,Keep verified offer details
+RN-05,Jadu / Jadui result,Magical result,Superlative claim,false,Replace with 'dikhne yogya parinaam' (visible results),Cosmetics cannot promise magic

@@ -1,0 +1,6 @@
+post_id,channel,scheduled_for,product,summary,launch_date_mentioned,price_mentioned_inr,offer_mentioned,status
+P-01,Instagram,2026-11-19 18:00,GV-SER-30,Hydra Glow Serum launches today,2026-11-19,,,scheduled (CLASH: launch is 2026-11-20)
+P-02,Email,2026-11-20 09:00,GV-SER-30,Winter Sale starts: 20% off the serum,2026-11-20,799,OFF-01,scheduled
+P-03,X (Twitter),2026-11-21 12:00,GV-SPF-50,Daily Shield now just 499,,499,,scheduled (CLASH: current price is 549)
+P-04,Facebook,2026-11-22 10:00,GV-SER-30 + GV-CLN-100,Serum + Cleanser bundle for 999,2026-11-20,999,OFF-03,scheduled
+P-05,LinkedIn,2026-11-25 11:00,ALL,Use WELCOME10 for 10% off your first order,,,OFF-02,scheduled

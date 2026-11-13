@@ -1,0 +1,14 @@
+claim_id,claim_text,status,applies_to,required_evidence,source_id,rule_ref,safe_alternative
+C-01,Formulated with 2% hyaluronic acid,approved,GV-SER-30,Product Facts Sheet,S-02,Claims 3.1,(use as is)
+C-02,Dermatologist-tested on 30 volunteers,approved,"GV-SER-30, GV-CLN-100",Study DT-2026-04; must name the study,S-05,Claims 3.1,(use as is)
+C-03,Fragrance-free,approved,"GV-SER-30, GV-CLN-100",Product Facts Sheet,S-02,Claims 3.1,(use as is)
+C-04,SPF 50 PA++++,approved,GV-SPF-50,SPF test report ISO 24444,S-07,Claims 3.1,(use as is)
+C-05,Cruelty-free certified,restricted: certificate review overdue,ALL,Valid certificate,S-06,Claims 3.3,Hold until Quality Team renews the certificate
+C-06,Suitable for sensitive skin,restricted: no study yet,ALL,Sensitive-skin study (none on file),,Claims 3.1,"Gentle, fragrance-free formula"
+C-07,Clinically proven,prohibited,ALL,Peer-reviewed clinical study (none on file),,Claims 3.1,Dermatologist-tested on 30 volunteers
+C-08,Removes wrinkles / anti-wrinkle results in days,prohibited,ALL,Not allowed for a cosmetic,,Claims 3.2,Helps skin look smoother
+C-09,100% natural / chemical-free,prohibited,ALL,Not accurate for any product,,Claims 3.2,Made with plant-derived ingredients (only where true)
+C-10,Guaranteed results / instant results,prohibited,ALL,Not allowed,,Claims 3.2,Visible results vary from person to person
+C-11,Dermatologist-recommended,prohibited,ALL,No recommendation study on file,,Claims 3.1,Dermatologist-tested on 30 volunteers
+C-12,Best sunscreen in India / No. 1,prohibited,ALL,No comparative study,,Claims 3.2,SPF 50 PA++++ daily protection
+C-13,Cures acne / treats a skin disease,prohibited,ALL,"Drug-style claim, not allowed",,Claims 3.2,(remove the claim)

@@ -1,0 +1,11 @@
+fact_id,product_code,fact_key,fact_value,source_id,verified_date
+F-01,GV-SER-30,product_name,Hydra Glow Serum,S-02,2026-11-05
+F-02,GV-SER-30,pack_size,30ml,S-02,2026-11-05
+F-03,GV-SER-30,launch_date,2026-11-20,S-02,2026-11-05
+F-04,GV-SER-30,key_ingredient,2% Hyaluronic Acid,S-02,2026-11-05
+F-05,GV-SPF-50,product_name,Daily Shield Sunscreen,S-03,2026-11-01
+F-06,GV-SPF-50,pack_size,50g,S-03,2026-11-01
+F-07,GV-SPF-50,spf_rating,SPF 50 PA++++,S-03,2026-11-01
+F-08,GV-CLN-100,product_name,Gentle Foam Cleanser,S-01,2026-11-01
+F-09,GV-CLN-100,pack_size,100ml,S-01,2026-11-01
+F-10,ALL,origin,Made in India,S-01,2026-11-01

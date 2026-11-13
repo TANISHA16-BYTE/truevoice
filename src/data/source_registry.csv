@@ -1,0 +1,11 @@
+source_id,title,category,owner,last_verified_date,validity_days,status
+S-01,Glowvale Brand Guidelines 2026,guideline,Brand Manager,2026-11-01,180,current
+S-02,Product Facts Sheet - Hydra Glow Serum,product_spec,Product Lead,2026-11-05,180,current
+S-03,Product Facts Sheet - Daily Shield Sunscreen,product_spec,Product Lead,2026-11-01,180,current
+S-04,Pricing Sheet Q4 2026,finance,Finance Team,2026-11-01,90,current
+S-05,Study DT-2026-04 Dermatologist Evaluation,study,Clinical Research,2026-04-10,365,current
+S-06,Cruelty-Free Certification Cert-CF-2025,certificate,Quality Team,2025-10-01,365,expired
+S-07,SPF Test Report ISO 24444 (GV-SPF-50),lab_report,Lab Quality Lead,2026-05-15,365,current
+S-08,Winter Campaign Offer Sheet,promotions,Marketing Lead,2026-11-01,60,current
+S-09,Protected Names List,legal,Legal Contact,2026-10-15,180,current
+S-10,Regional Language Notes (Hinglish),guideline,Regional Reviewer,2026-11-05,90,current
