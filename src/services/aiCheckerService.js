@@ -160,7 +160,17 @@ function sanitizeAiFindings(list, text, brandGuide) {
   }
   return clean;
 }
-
+// Retry a few times when Gemini is busy (503) or rate-limited, then give up.
+async function callGeminiWithRetry(prompt, apiKey, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const result = await callGeminiAPI(prompt, apiKey);
+    if (result !== null) return result;
+    if (attempt < retries) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  return null;
+}
 async function checkSemanticAI(text, existingFindings = []) {
   const existingRulesFlagged = new Set(existingFindings.map((f) => f.rule_ref));
   const aiFindings = [];
@@ -170,7 +180,7 @@ async function checkSemanticAI(text, existingFindings = []) {
     try {
       const brandGuide = loadBrandGuide();
       const prompt = buildPrompt(text, brandGuide);
-      const geminiResult = await callGeminiAPI(prompt, config.GEMINI_API_KEY);
+      const geminiResult = await callGeminiWithRetry(prompt, config.GEMINI_API_KEY);
       if (Array.isArray(geminiResult)) {
         const checked = sanitizeAiFindings(geminiResult, text, brandGuide);
         if (checked.length > 0) {
