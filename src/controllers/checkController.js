@@ -18,7 +18,24 @@ async function checkContent(body, user) {
   
   return { status: 200, data: result };
 }
+function inferBatchProductKey(draft, text) {
+  if (draft.product_code) return draft.product_code;
+  const lower = text.toLowerCase();
+  if (lower.includes("hydra glow") || lower.includes("serum") || lower.includes("gv-ser-30")) return "GV-SER-30";
+  if (lower.includes("daily shield") || lower.includes("sunscreen") || lower.includes("gv-spf-50")) return "GV-SPF-50";
+  if (lower.includes("gentle foam") || lower.includes("cleanser") || lower.includes("gv-cln-100")) return "GV-CLN-100";
+  return "DEFAULT";
+}
 
+function extractBatchPrice(draft, text) {
+  if (draft.price_inr !== undefined && draft.price_inr !== null) return Number(draft.price_inr);
+  if (draft.price !== undefined && draft.price !== null) return Number(draft.price);
+  const match =
+    text.match(/(?:₹|inr\s*|rs\.?\s*)(\d{2,5})\b/i) ||
+    text.match(/\b(\d{2,5})\s*(?:rs\.?|inr)\b/i) ||
+    text.match(/\b(?:for|at|priced at)\s+(\d{3,5})\b(?!\s*(?:ml|g|mg|%|nov|dec|volunteers|days))/i);
+  return match ? parseInt(match[1], 10) : null;
+}
 async function checkBatch(body, user) {
   const { drafts = [] } = body || {};
   if (!Array.isArray(drafts) || drafts.length === 0) {
@@ -57,6 +74,24 @@ async function checkBatch(body, user) {
         });
       }
       datesSeen.set(d.launch_date, d.channel);
+    }
+    // Cross-channel price consistency per product in batch
+    const batchText = d.content || d.text || "";
+    const productKey = inferBatchProductKey(d, batchText);
+    const batchPrice = extractBatchPrice(d, batchText);
+    if (batchPrice !== null && Number.isFinite(batchPrice)) {
+      if (pricesSeen.has(productKey)) {
+        const prev = pricesSeen.get(productKey);
+        if (prev.price !== batchPrice) {
+          crossChannelClashes.push({
+            type: "batch_price_clash",
+            product_code: productKey,
+            message: "Channel " + (d.channel || "General") + " quotes ₹" + batchPrice + " for " + productKey + ", which conflicts with ₹" + prev.price + " on " + prev.channel + "."
+          });
+        }
+      } else {
+        pricesSeen.set(productKey, { price: batchPrice, channel: d.channel || "General" });
+      }
     }
   }
 
