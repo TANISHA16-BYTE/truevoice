@@ -1,5 +1,72 @@
 // Exact-Match Rules Engine
 const db = require("../db/database");
+const config = require("../config");
+
+const EXACT_MONTH_MAP = {
+  jan: "01", january: "01",
+  feb: "02", february: "02",
+  mar: "03", march: "03",
+  apr: "04", april: "04",
+  may: "05",
+  jun: "06", june: "06",
+  jul: "07", july: "07",
+  aug: "08", august: "08",
+  sep: "09", sept: "09", september: "09",
+  oct: "10", october: "10",
+  nov: "11", november: "11",
+  dec: "12", december: "12"
+};
+
+function extractQuotedPrices(text) {
+  const found = [];
+  const seen = new Set();
+  const patterns = [
+    /(?:₹|inr\s*|rs\.?\s*)(\d{2,5})\b/gi,
+    /\b(\d{2,5})\s*(?:rs\.?|inr)\b/gi,
+    /\b(?:priced at|price(?:d)?(?: of)?|for just|now just|available (?:now )?for|at)\s+(\d{3,5})\b(?!\s*(?:ml|g|mg|%|percent|volunteers|days|nov|dec|jan|feb|mar|apr|may|jun|jul|aug|sep|oct))/gi
+  ];
+
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const value = parseInt(m[1], 10);
+      if (Number.isFinite(value) && !seen.has(value)) {
+        seen.add(value);
+        found.push({ value, raw: m[0].trim() });
+      }
+    }
+  }
+  return found;
+}
+
+function extractOfferCheckDates(text, defaultYear = "2026") {
+  const dates = [];
+  const seen = new Set();
+  const add = (iso) => {
+    if (!seen.has(iso)) {
+      seen.add(iso);
+      dates.push(iso);
+    }
+  };
+
+  let m;
+  const isoRe = /\b(\d{4}-\d{2}-\d{2})\b/g;
+  while ((m = isoRe.exec(text)) !== null) add(m[1]);
+
+  const dmyRe = /\b(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+(\d{4}))?\b/gi;
+  while ((m = dmyRe.exec(text)) !== null) {
+    const month = EXACT_MONTH_MAP[m[2].toLowerCase()];
+    if (month) add(`${m[3] || defaultYear}-${month}-${m[1].padStart(2, "0")}`);
+  }
+
+  const mdyRe = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:,?\s+(\d{4}))?\b/gi;
+  while ((m = mdyRe.exec(text)) !== null) {
+    const month = EXACT_MONTH_MAP[m[1].toLowerCase()];
+    if (month) add(`${m[3] || defaultYear}-${month}-${m[2].padStart(2, "0")}`);
+  }
+
+  return dates;
+}
 
 function checkExactRules(text, metadata = {}) {
   const findings = [];
@@ -117,30 +184,52 @@ function checkExactRules(text, metadata = {}) {
   }
 
   // ----------------------------------------------------
-  // 3. PRICING CHECKS (Outdated vs Current Prices)
+  // 3. PRICING CHECKS (Outdated & Incorrect Prices)
   // ----------------------------------------------------
   const prices = db.query("SELECT * FROM prices");
-  for (const p of prices) {
-    if (p.old_price_inr && p.old_price_inr !== p.current_price_inr) {
-      const mentionsOldPrice = normalizedText.includes(String(p.old_price_inr));
-      if (mentionsOldPrice) {
-        const productLower = p.product_name.toLowerCase();
-        const codeLower = p.product_code.toLowerCase();
-        const mentionsProduct = normalizedText.includes(productLower) ||
-                                normalizedText.includes(codeLower) ||
-                                (p.product_code === "GV-SPF-50" && (normalizedText.includes("sunscreen") || normalizedText.includes("shield"))) ||
-                                (p.product_code === "GV-SER-30" && (normalizedText.includes("serum") || normalizedText.includes("hydra")));
-        
-        if (mentionsProduct) {
+  const matchedProducts = prices.filter((p) => {
+    const productLower = p.product_name.toLowerCase();
+    const codeLower = p.product_code.toLowerCase();
+    return (
+      normalizedText.includes(productLower) ||
+      normalizedText.includes(codeLower) ||
+      (p.product_code === "GV-SPF-50" && (normalizedText.includes("sunscreen") || normalizedText.includes("shield"))) ||
+      (p.product_code === "GV-SER-30" && (normalizedText.includes("serum") || normalizedText.includes("hydra"))) ||
+      (p.product_code === "GV-CLN-100" && (normalizedText.includes("cleanser") || normalizedText.includes("foam")))
+    );
+  });
+
+  const isBundleContext = normalizedText.includes("bundle") || matchedProducts.length > 1;
+  const quotedPrices = extractQuotedPrices(text);
+
+  for (const p of matchedProducts) {
+    // 3a. Existing outdated price check (old_price_inr)
+    if (p.old_price_inr && p.old_price_inr !== p.current_price_inr && normalizedText.includes(String(p.old_price_inr))) {
+      findings.push({
+        type: "pricing_violation",
+        severity: "HIGH",
+        flagged_text: "₹" + p.old_price_inr,
+        rule_ref: "Pricing 2.1",
+        source_id: p.source_id || "S-04",
+        reason: "Outdated price: " + p.product_name + " was ₹" + p.old_price_inr + ", but current price is ₹" + p.current_price_inr + " (effective " + p.effective_date + ").",
+        suggested_fix: "₹" + p.current_price_inr,
+        confidence: 1.0
+      });
+    }
+
+    // 3b. Arbitrary incorrect price check against current_price_inr (skip multi-SKU bundles)
+    if (!isBundleContext) {
+      for (const qp of quotedPrices) {
+        if (qp.value !== p.current_price_inr && qp.value !== p.old_price_inr) {
           findings.push({
             type: "pricing_violation",
             severity: "HIGH",
-            flagged_text: "₹" + p.old_price_inr,
+            flagged_text: "₹" + qp.value,
             rule_ref: "Pricing 2.1",
             source_id: p.source_id || "S-04",
-            reason: "Outdated price: " + p.product_name + " was ₹" + p.old_price_inr + ", but current price is ₹" + p.current_price_inr + " (effective " + p.effective_date + ").",
+            reason: "Incorrect price: " + p.product_name + " current price is ₹" + p.current_price_inr + ", not ₹" + qp.value + " (effective " + p.effective_date + ").",
             suggested_fix: "₹" + p.current_price_inr,
-            confidence: 1.0
+            confidence: 0.95
           });
         }
       }
@@ -148,7 +237,7 @@ function checkExactRules(text, metadata = {}) {
   }
 
   // ----------------------------------------------------
-  // 4. OFFERS & CAMPAIGN CHECKS (Discounts & Expired Offers)
+  // 4. OFFERS & CAMPAIGN CHECKS (Discounts, Status & Dates)
   // ----------------------------------------------------
   if (normalizedText.includes("30% off") || normalizedText.includes("30% discount") || normalizedText.includes("flat 30%")) {
     findings.push({
@@ -163,7 +252,9 @@ function checkExactRules(text, metadata = {}) {
     });
   }
 
+  let diwaliFlagged = false;
   if (normalizedText.includes("diwali") || normalizedText.includes("diwali15")) {
+    diwaliFlagged = true;
     findings.push({
       type: "expired_offer",
       severity: "HIGH",
@@ -174,6 +265,53 @@ function checkExactRules(text, metadata = {}) {
       suggested_fix: "Use active winter campaign offer (WINTER20) or standard WELCOME10",
       confidence: 1.0
     });
+  }
+
+  const offers = db.query("SELECT * FROM offers");
+  const demoDate = config.DEMO_DATE || "2026-11-13";
+  const explicitDates = extractOfferCheckDates(text, demoDate.slice(0, 4));
+  const scheduledDate = metadata.scheduled_for ? String(metadata.scheduled_for).slice(0, 10) : null;
+  const datesToValidate = scheduledDate ? [scheduledDate, ...explicitDates] : explicitDates;
+
+  for (const offer of offers) {
+    const codeLower = offer.code.toLowerCase();
+    const titleLower = offer.title.toLowerCase();
+    const mentionsOffer = normalizedText.includes(codeLower) || normalizedText.includes(titleLower);
+    if (!mentionsOffer) continue;
+    if (offer.offer_id === "OFF-04" && diwaliFlagged) continue;
+
+    // Status or past valid_to against DEMO_DATE / scheduled date
+    const checkDate = scheduledDate || demoDate;
+    if (offer.status === "expired" || checkDate > offer.valid_to) {
+      findings.push({
+        type: "expired_offer",
+        severity: "HIGH",
+        flagged_text: offer.code,
+        rule_ref: "Offers 2.2",
+        source_id: "S-08",
+        reason: "Offer " + offer.title + " (" + offer.code + ", " + offer.offer_id + ") expired on " + offer.valid_to + " (status: " + offer.status + ").",
+        suggested_fix: "Use an active offer within its valid window (e.g., WINTER20: 2026-11-20 to 2026-11-30, or WELCOME10: 2026-11-01 to 2026-12-31).",
+        confidence: 1.0
+      });
+      continue;
+    }
+
+    // Explicit date (mentioned in draft text or metadata.scheduled_for) outside [valid_from, valid_to]
+    for (const d of datesToValidate) {
+      if (d < offer.valid_from || d > offer.valid_to) {
+        findings.push({
+          type: "offer_date_violation",
+          severity: "HIGH",
+          flagged_text: offer.code,
+          rule_ref: "Offers 2.2",
+          source_id: "S-08",
+          reason: "Offer " + offer.code + " (" + offer.offer_id + ") is only valid from " + offer.valid_from + " to " + offer.valid_to + ", not on " + d + ".",
+          suggested_fix: "Align promotion date to " + offer.valid_from + "–" + offer.valid_to + " or use WELCOME10.",
+          confidence: 1.0
+        });
+        break;
+      }
+    }
   }
 
   // ----------------------------------------------------

@@ -1,6 +1,8 @@
 // In-Memory API Integration Test Suite for TrueVoice (18 Comprehensive Tests)
 const { server } = require("../server");
 const { seedDatabase } = require("../src/db/seed");
+const config = require("../src/config");
+const { checkExactRules } = require("../src/services/exactRulesEngine");
 const EventEmitter = require("events");
 
 function invokeRoute(method, urlStr, headers = {}, body = null) {
@@ -212,7 +214,119 @@ async function runApiTests() {
     const auditRes = await invokeRoute("GET", "/api/audit-logs/export?format=csv");
     if (auditRes.status !== 200 || typeof auditRes.data !== "string" || !auditRes.data.includes("History_ID")) throw new Error("Audit CSV export failed");
     console.log("  -> Passed. Compliance Audit Log CSV exported successfully.");
+    console.log("\n[TEST 19] Gemini Unavailable/Failing Fallback & 4 Demo Drafts");
+    const savedGeminiKey = config.GEMINI_API_KEY;
+    try {
+      config.GEMINI_API_KEY = ""; // Simulate missing key / offline fallback
+      const d1 = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+        text: "Our serum is clinically proven to remove wrinkles in 3 days. Launching Friday 20 Nov with flat 30% off!",
+        channel: "Email",
+        product_code: "GV-SER-30"
+      });
+      const d2 = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+        text: "Celebrate this festive season with radiant skin. Use WELCOME10 for 10% off your first order.",
+        channel: "Display Ads",
+        product_code: "ALL"
+      });
+      const d3 = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+        text: "Introducing Dewlite alternative serum with cruelty-free certified testing for our Q4 sales partners.",
+        channel: "Sales",
+        product_code: "GV-SER-30"
+      });
+      const d4 = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+        text: "Something fresh is arriving. Hydra Glow Serum with 2% hyaluronic acid for deep hydration.",
+        channel: "Instagram",
+        product_code: "GV-SER-30"
+      });
+      if (d1.status !== 200 || d1.data.risk_level !== "HIGH") throw new Error("Demo draft 1 fallback failed");
+      if (d2.status !== 200 || d2.data.risk_level !== "LOW" || d2.data.findings_count !== 0) throw new Error("Demo draft 2 fallback failed");
+      if (d3.status !== 200 || d3.data.risk_level !== "MEDIUM") throw new Error("Demo draft 3 fallback failed");
+      if (d4.status !== 200 || d4.data.risk_level !== "LOW" || d4.data.findings_count !== 0) throw new Error("Demo draft 4 fallback failed");
 
+      // Simulate invalid key (API 400/403 failure fallback without crashing)
+      config.GEMINI_API_KEY = "invalid-gemini-key-for-fallback-test";
+      const failCheck = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+        text: "Hydra Glow Serum with 2% hyaluronic acid."
+      });
+      if (failCheck.status !== 200) throw new Error("Gemini failure crashed /api/check");
+    } finally {
+      config.GEMINI_API_KEY = savedGeminiKey;
+    }
+    console.log("  -> Passed. Fallback handled Gemini outage & all 4 demo drafts.");
+
+    console.log("\n[TEST 20] Launch Date Validation (No false launch clash vs Conflicting launch date)");
+    const cleanDrop = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+      text: "Our new serum drops soon!",
+      channel: "Instagram",
+      product_code: "GV-SER-30"
+    });
+    if (cleanDrop.data.findings.some(f => f.type === "schedule_clash")) {
+      throw new Error("False positive launch clash on dateless launch mention");
+    }
+    const wrongLaunch = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+      text: "Hydra Glow Serum launches Thursday 19 Nov!",
+      channel: "Email",
+      product_code: "GV-SER-30"
+    });
+    if (!wrongLaunch.data.findings.some(f => f.type === "schedule_clash" && f.rule_ref === "Schedule 5.1")) {
+      throw new Error("Conflicting launch date 19 Nov was not flagged");
+    }
+    console.log("  -> Passed. Launch-date bug fixed and conflicting dates flagged.");
+
+    console.log("\n[TEST 21] Offer Date Validation (Valid vs Expired & Out-of-Window Dates)");
+    const validOffer = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+      text: "Get 20% off Hydra Glow Serum using WINTER20 on 22 Nov 2026."
+    });
+    if (validOffer.data.findings.some(f => f.type === "expired_offer" || f.type === "offer_date_violation")) {
+      throw new Error("Valid offer window was falsely flagged");
+    }
+    const expiredOffer = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+      text: "Use DIWALI15 for 15% off today!"
+    });
+    if (!expiredOffer.data.findings.some(f => f.type === "expired_offer")) {
+      throw new Error("Expired offer DIWALI15 was not flagged");
+    }
+    const outOfWindowOffer = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+      text: "Use WINTER20 on 5 Dec 2026 for 20% off."
+    });
+    if (!outOfWindowOffer.data.findings.some(f => f.type === "offer_date_violation")) {
+      throw new Error("Out-of-window offer date was not flagged");
+    }
+    const scheduledOutOfWindow = checkExactRules("Use WINTER20 for 20% off.", { scheduled_for: "2026-11-15" });
+    if (!scheduledOutOfWindow.some(f => f.type === "offer_date_violation")) {
+      throw new Error("scheduled_for before offer valid_from was not flagged");
+    }
+    console.log("  -> Passed. Offer date windows validated.");
+
+    console.log("\n[TEST 22] Arbitrary Incorrect Price & Scheduled-Post P-03 Conflict (₹499 vs ₹549)");
+    const wrongSerumPrice = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+      text: "Order Hydra Glow Serum today for ₹650."
+    });
+    if (!wrongSerumPrice.data.findings.some(f => f.type === "pricing_violation" && f.flagged_text === "₹650")) {
+      throw new Error("Arbitrary wrong price ₹650 was not flagged");
+    }
+    const spfClash = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
+      text: "Daily Shield Sunscreen is available now for ₹549.",
+      channel: "Email",
+      product_code: "GV-SPF-50"
+    });
+    if (!spfClash.data.findings.some(f => f.type === "schedule_clash" && f.rule_ref === "Pricing 2.1")) {
+      throw new Error("Scheduled post P-03 ₹499 vs ₹549 conflict was not detected");
+    }
+    console.log("  -> Passed. Arbitrary wrong prices & P-03 ₹499 vs ₹549 conflict detected.");
+
+    console.log("\n[TEST 23] POST /api/check/batch (Batch Date Clash & Batch Price Clash)");
+    const batchClashRes = await invokeRoute("POST", "/api/check/batch", { "content-type": "application/json" }, {
+      drafts: [
+        { channel: "Instagram", content: "Daily Shield Sunscreen for ₹549", product_code: "GV-SPF-50", launch_date: "2026-11-20" },
+        { channel: "Email", content: "Daily Shield Sunscreen for ₹499", product_code: "GV-SPF-50", launch_date: "2026-11-19" }
+      ]
+    });
+    const clashes = batchClashRes.data.cross_channel_clashes || [];
+    if (!clashes.some(c => c.type === "batch_date_clash") || !clashes.some(c => c.type === "batch_price_clash")) {
+      throw new Error("Batch date/price clash detection failed");
+    }
+    console.log("  -> Passed. Batch date clash and batch price clash detected.");
     console.log("\n=======================================================");
     console.log("   ALL 18 END-TO-END INTEGRATION TESTS PASSED 100%!");
     console.log("=======================================================\n");
