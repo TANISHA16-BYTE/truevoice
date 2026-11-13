@@ -1,11 +1,10 @@
 // TrueVoice High-Performance REST API Server
 const http = require("node:http");
-const url = require("node:url");
 const config = require("./src/config");
 const { getUserFromToken } = require("./src/services/authService");
 const { seedDatabase } = require("./src/db/seed");
 
-// Controllers
+// Controllers & Services
 const authCtrl = require("./src/controllers/authController");
 const checkCtrl = require("./src/controllers/checkController");
 const draftsCtrl = require("./src/controllers/draftsController");
@@ -13,7 +12,11 @@ const libraryCtrl = require("./src/controllers/libraryController");
 const badgeCtrl = require("./src/controllers/badgeController");
 const healthCtrl = require("./src/controllers/healthController");
 const mistakesCtrl = require("./src/controllers/mistakesController");
+const uploadCtrl = require("./src/controllers/uploadController");
+const auditCtrl = require("./src/controllers/auditController");
 const { listScheduledPosts } = require("./src/services/scheduleClashService");
+const { generateQRCodeSVG } = require("./src/services/qrService");
+const { getOpenApiSpec, getSwaggerHtml } = require("./src/services/docsService");
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -69,6 +72,17 @@ const server = http.createServer(async (req, res) => {
 
   try {
     // ----------------------------------------------------
+    // Swagger Documentation UI & OpenAPI Spec
+    // ----------------------------------------------------
+    if (pathname === "/docs" || pathname === "/api/docs") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      return res.end(getSwaggerHtml());
+    }
+    if (pathname === "/api/openapi.json") {
+      return sendJson(res, 200, getOpenApiSpec());
+    }
+
+    // ----------------------------------------------------
     // Root & API Info
     // ----------------------------------------------------
     if (pathname === "/" || pathname === "/api" || pathname === "/api/health") {
@@ -78,10 +92,14 @@ const server = http.createServer(async (req, res) => {
         version: "1.0.0",
         demo_date: config.DEMO_DATE,
         status: "ONLINE",
+        docs_url: config.BASE_URL + "/docs",
         endpoints: [
+          "GET  /docs (Interactive Swagger UI)",
           "POST /api/auth/login",
           "GET  /api/auth/me",
           "POST /api/check",
+          "POST /api/check/batch (Cross-channel batch check)",
+          "POST /api/upload (File upload & extraction)",
           "POST /api/drafts",
           "GET  /api/drafts",
           "GET  /api/drafts/:id",
@@ -100,10 +118,12 @@ const server = http.createServer(async (req, res) => {
           "GET  /api/library/rules",
           "GET  /api/clash/posts",
           "GET  /api/verify/:badgeCode",
+          "GET  /api/verify/:badgeCode/qr (QR Code SVG)",
           "POST /api/verify",
           "GET  /api/health-score",
           "POST /api/ai-mistakes",
-          "GET  /api/ai-mistakes"
+          "GET  /api/ai-mistakes",
+          "GET  /api/audit-logs/export?format=csv|json"
         ]
       });
     }
@@ -121,10 +141,18 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ----------------------------------------------------
-    // Checking Routes
+    // Checking Routes (Live & Batch)
     // ----------------------------------------------------
     if (pathname === "/api/check" && method === "POST") {
       const resp = await checkCtrl.checkContent(body, currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
+    if (pathname === "/api/check/batch" && method === "POST") {
+      const resp = await checkCtrl.checkBatch(body, currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
+    if (pathname === "/api/upload" && method === "POST") {
+      const resp = await uploadCtrl.handleFileUpload(body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
@@ -234,6 +262,18 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------------
     // Verification & Proof-of-Approval Badge Routes
     // ----------------------------------------------------
+    const qrMatch = pathname.match(/^\/api\/verify\/([A-Za-z0-9_-]+)\/qr$/);
+    if (qrMatch && method === "GET") {
+      const badgeCode = qrMatch[1];
+      const verifyUrl = config.BASE_URL + "/verify/" + badgeCode;
+      const svg = generateQRCodeSVG(verifyUrl, 250);
+      res.writeHead(200, {
+        "Content-Type": "image/svg+xml",
+        "Access-Control-Allow-Origin": "*"
+      });
+      return res.end(svg);
+    }
+
     const verifyMatch = pathname.match(/^\/api\/verify\/([A-Za-z0-9_-]+)$/) || pathname.match(/^\/verify\/([A-Za-z0-9_-]+)$/);
     if (verifyMatch && method === "GET") {
       const resp = badgeCtrl.getBadgeVerification(verifyMatch[1]);
@@ -264,6 +304,22 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, resp.status, resp.data);
     }
 
+    // ----------------------------------------------------
+    // Audit Trail Export
+    // ----------------------------------------------------
+    if (pathname === "/api/audit-logs/export" && method === "GET") {
+      const resp = auditCtrl.exportAuditLogs(query);
+      if (resp.contentType === "text/csv") {
+        res.writeHead(200, {
+          "Content-Type": "text/csv",
+          "Access-Control-Allow-Origin": "*",
+          ...resp.headers
+        });
+        return res.end(resp.raw);
+      }
+      return sendJson(res, resp.status, resp.data);
+    }
+
     // 404 Fallback
     return sendJson(res, 404, { error: "Route " + method + " " + pathname + " not found" });
   } catch (err) {
@@ -276,6 +332,7 @@ function startServer(port = config.PORT) {
   return new Promise((resolve) => {
     server.listen(port, config.HOST, () => {
       console.log(`TrueVoice API Server running at http://${config.HOST}:${port}`);
+      console.log(`Interactive Swagger Docs at http://${config.HOST}:${port}/docs`);
       resolve(server);
     });
   });

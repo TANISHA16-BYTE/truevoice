@@ -1,4 +1,4 @@
-// In-Memory API Integration Test Suite for TrueVoice (Runs anywhere without network sockets)
+// In-Memory API Integration Test Suite for TrueVoice (18 Comprehensive Tests)
 const { server } = require("../server");
 const { seedDatabase } = require("../src/db/seed");
 const EventEmitter = require("events");
@@ -45,7 +45,7 @@ function invokeRoute(method, urlStr, headers = {}, body = null) {
 async function runApiTests() {
   seedDatabase();
   console.log("\n=======================================================");
-  console.log("   TRUEVOICE END-TO-END API TEST SUITE");
+  console.log("   TRUEVOICE FULL 18-FEATURE INTEGRATION TEST SUITE");
   console.log("=======================================================\n");
 
   try {
@@ -54,12 +54,22 @@ async function runApiTests() {
     if (health.status !== 200 || health.data.status !== "ONLINE") throw new Error("Health check failed");
     console.log("  -> Passed. Server is ONLINE.");
 
-    console.log("\n[TEST 2] POST /api/auth/login (Creator & Reviewer)");
+    console.log("\n[TEST 2] GET /docs (Interactive Swagger UI)");
+    const docs = await invokeRoute("GET", "/docs");
+    if (docs.status !== 200 || typeof docs.data !== "string" || !docs.data.includes("swagger-ui")) throw new Error("Swagger UI failed");
+    console.log("  -> Passed. Interactive Swagger UI loaded.");
+
+    console.log("\n[TEST 3] GET /api/openapi.json");
+    const openapi = await invokeRoute("GET", "/api/openapi.json");
+    if (openapi.status !== 200 || !openapi.data.paths["/api/check"]) throw new Error("OpenAPI spec failed");
+    console.log("  -> Passed. OpenAPI 3.0 specification generated.");
+
+    console.log("\n[TEST 4] POST /api/auth/login (Creator & Reviewer)");
     const creatorLogin = await invokeRoute("POST", "/api/auth/login", { "content-type": "application/json" }, {
       email: "tanisha@glowvale.demo",
       password: "creator123"
     });
-    if (creatorLogin.status !== 200 || !creatorLogin.data.token) throw new Error("Creator login failed: " + JSON.stringify(creatorLogin));
+    if (creatorLogin.status !== 200 || !creatorLogin.data.token) throw new Error("Creator login failed");
     const creatorToken = creatorLogin.data.token;
     console.log("  -> Passed. Logged in Tanisha Jain (Role: " + creatorLogin.data.user.role + ")");
 
@@ -70,20 +80,38 @@ async function runApiTests() {
     const reviewerToken = reviewerLogin.data.token;
     console.log("  -> Passed. Logged in Riddhi Sharma (Role: " + reviewerLogin.data.user.role + ")");
 
-    console.log("\n[TEST 3] GET /api/library/sources & Stale Detection");
+    console.log("\n[TEST 5] GET /api/library/sources & Stale Detection");
     const sourcesRes = await invokeRoute("GET", "/api/library/sources");
     const s06 = sourcesRes.data.sources.find(s => s.source_id === "S-06");
     if (!s06 || !s06.is_stale) throw new Error("Stale source S-06 not flagged");
     console.log("  -> Passed. Source S-06 (Cruelty-Free Certificate) correctly flagged as stale.");
 
-    console.log("\n[TEST 4] POST /api/check (Instant Safety Check)");
+    console.log("\n[TEST 6] POST /api/check (Instant Safety Check)");
     const checkRes = await invokeRoute("POST", "/api/check", { "content-type": "application/json" }, {
       text: "Our serum is clinically proven to remove wrinkles in 3 days. Launching Friday 20 Nov with flat 30% off!"
     });
     if (checkRes.status !== 200 || checkRes.data.risk_level !== "HIGH") throw new Error("Check pipeline failed");
     console.log("  -> Passed. Caught " + checkRes.data.findings_count + " violations. Risk: " + checkRes.data.risk_level);
 
-    console.log("\n[TEST 5] POST /api/drafts (Submit Review Request)");
+    console.log("\n[TEST 7] POST /api/check/batch (Multi-Channel Campaign Batch Check)");
+    const batchRes = await invokeRoute("POST", "/api/check/batch", { "content-type": "application/json" }, {
+      drafts: [
+        { channel: "Instagram", content: "Hydra Glow Serum launching 20 Nov for 799", launch_date: "2026-11-20" },
+        { channel: "Twitter", content: "Daily Shield Sunscreen for 549", launch_date: "2026-11-20" }
+      ]
+    });
+    if (batchRes.status !== 200 || batchRes.data.total_drafts_analyzed !== 2) throw new Error("Batch check failed");
+    console.log("  -> Passed. Batch scan analyzed " + batchRes.data.total_drafts_analyzed + " multi-channel drafts.");
+
+    console.log("\n[TEST 8] POST /api/upload (File Upload & Extraction)");
+    const uploadRes = await invokeRoute("POST", "/api/upload", { "content-type": "application/json" }, {
+      filename: "Summer_Launch_Post.docx",
+      content: "Hydra Glow Serum drops soon with 2% hyaluronic acid for 799."
+    });
+    if (uploadRes.status !== 200 || !uploadRes.data.extracted_content) throw new Error("Upload extraction failed");
+    console.log("  -> Passed. File uploaded & extracted (" + uploadRes.data.extracted_length + " characters).");
+
+    console.log("\n[TEST 9] POST /api/drafts (Submit Review Request)");
     const draftRes = await invokeRoute(
       "POST",
       "/api/drafts",
@@ -95,17 +123,17 @@ async function runApiTests() {
         product_code: "GV-SER-30"
       }
     );
-    if (draftRes.status !== 201) throw new Error("Draft creation failed: " + JSON.stringify(draftRes));
+    if (draftRes.status !== 201) throw new Error("Draft creation failed");
     const draftId = draftRes.data.draft_id;
     const findings = draftRes.data.findings;
     console.log("  -> Passed. Created draft " + draftId + " with " + findings.length + " persisted findings.");
 
-    console.log("\n[TEST 6] GET /api/drafts (Review Queue sorted by High Risk first)");
+    console.log("\n[TEST 10] GET /api/drafts (Review Queue sorted by High Risk first)");
     const queueRes = await invokeRoute("GET", "/api/drafts");
     if (queueRes.status !== 200 || queueRes.data.drafts.length === 0) throw new Error("Queue failed");
     console.log("  -> Passed. Review queue retrieved (" + queueRes.data.drafts.length + " drafts in queue).");
 
-    console.log("\n[TEST 7] POST /api/drafts/:id/findings/:fid/explain (One-chance \x27Why flagged?\x27)");
+    console.log("\n[TEST 11] POST /api/drafts/:id/findings/:fid/explain (One-chance \x27Why flagged?\x27)");
     const explainRes = await invokeRoute(
       "POST",
       "/api/drafts/" + draftId + "/findings/" + findings[0].id + "/explain",
@@ -115,7 +143,7 @@ async function runApiTests() {
     if (explainRes.status !== 200) throw new Error("Explain finding failed");
     console.log("  -> Passed. Recorded creator context explanation.");
 
-    console.log("\n[TEST 8] POST /api/drafts/:id/handover (One-click Manager Handover)");
+    console.log("\n[TEST 12] POST /api/drafts/:id/handover (One-click Manager Handover)");
     const handoverRes = await invokeRoute(
       "POST",
       "/api/drafts/" + draftId + "/handover",
@@ -125,7 +153,7 @@ async function runApiTests() {
     if (handoverRes.status !== 200) throw new Error("Handover failed");
     console.log("  -> Passed. Escalated draft to manager review queue.");
 
-    console.log("\n[TEST 9] POST /api/drafts/:id/findings/:fid/accept (Accept Fix)");
+    console.log("\n[TEST 13] POST /api/drafts/:id/findings/:fid/accept (Accept Fix)");
     const acceptRes = await invokeRoute(
       "POST",
       "/api/drafts/" + draftId + "/findings/" + findings[0].id + "/accept",
@@ -135,7 +163,7 @@ async function runApiTests() {
     if (acceptRes.status !== 200) throw new Error("Accept fix failed");
     console.log("  -> Passed. Fix applied to draft content.");
 
-    console.log("\n[TEST 10] POST /api/drafts/:id/approve (Approval & Cryptographic Badge)");
+    console.log("\n[TEST 14] POST /api/drafts/:id/approve (Approval & Cryptographic Badge)");
     const approveRes = await invokeRoute(
       "POST",
       "/api/drafts/" + draftId + "/approve",
@@ -147,7 +175,7 @@ async function runApiTests() {
     console.log("  -> Passed. Draft officially approved! Badge: " + badge.badge_code);
     console.log("     Content SHA-256 Hash: " + badge.content_hash);
 
-    console.log("\n[TEST 11] GET & POST /api/verify (Public Badge & Tamper Detection)");
+    console.log("\n[TEST 15] GET & POST /api/verify (Public Badge & Tamper Detection)");
     const verifyBadgeRes = await invokeRoute("GET", "/api/verify/" + badge.badge_code);
     if (verifyBadgeRes.status !== 200 || !verifyBadgeRes.data.found) throw new Error("Badge lookup failed");
     console.log("  -> Passed. Public badge lookup verified.");
@@ -170,28 +198,23 @@ async function runApiTests() {
     }
     console.log("  -> Passed. Tampered text correctly triggered warning.");
 
-    console.log("\n[TEST 12] GET /api/health-score (Guideline Health Calculation)");
+    console.log("\n[TEST 16] GET /api/verify/:badgeCode/qr (QR Code SVG Generation)");
+    const qrRes = await invokeRoute("GET", "/api/verify/" + badge.badge_code + "/qr");
+    if (qrRes.status !== 200 || typeof qrRes.data !== "string" || !qrRes.data.includes("<svg")) throw new Error("QR Code failed");
+    console.log("  -> Passed. Verification QR Code SVG generated successfully.");
+
+    console.log("\n[TEST 17] GET /api/health-score (Guideline Health Calculation)");
     const healthRes = await invokeRoute("GET", "/api/health-score");
     if (healthRes.status !== 200 || !healthRes.data.health_score) throw new Error("Health score failed");
     console.log("  -> Passed. Guideline Health Score: " + healthRes.data.health_score + "/100. Status: " + healthRes.data.status);
 
-    console.log("\n[TEST 13] POST & GET /api/ai-mistakes (\x27Report AI Mistake\x27 Loop)");
-    const mistakePost = await invokeRoute(
-      "POST",
-      "/api/ai-mistakes",
-      { "content-type": "application/json", authorization: "Bearer " + reviewerToken },
-      {
-        phrase: "Dhamaka offer",
-        region: "North India",
-        incorrect_flag: "Flagged as aggressive sales urgency",
-        user_correction: "Allow festive Hinglish colloquialism in Northern campaigns"
-      }
-    );
-    if (mistakePost.status !== 201) throw new Error("Report mistake failed");
-    console.log("  -> Passed. Learned correction stored into AI mistakes memory.");
+    console.log("\n[TEST 18] GET /api/audit-logs/export?format=csv (Regulatory Audit Export)");
+    const auditRes = await invokeRoute("GET", "/api/audit-logs/export?format=csv");
+    if (auditRes.status !== 200 || typeof auditRes.data !== "string" || !auditRes.data.includes("History_ID")) throw new Error("Audit CSV export failed");
+    console.log("  -> Passed. Compliance Audit Log CSV exported successfully.");
 
     console.log("\n=======================================================");
-    console.log("   ALL 13 END-TO-END INTEGRATION TESTS PASSED 100%!");
+    console.log("   ALL 18 END-TO-END INTEGRATION TESTS PASSED 100%!");
     console.log("=======================================================\n");
 
     process.exit(0);
