@@ -40,20 +40,24 @@ async function runCheckPipeline(payload) {
   });
   allFindings.push(...clashFindings);
 
-  // 5. Stale Source Check: check if any cited source in findings is stale
+    // 5. AI Semantic Judgment (Gemini or heuristic fallback)
+  try {
+    const aiFindings = await checkSemanticAI(text, allFindings);
+    allFindings.push(...aiFindings);
+  } catch (e) {
+    console.warn("AI check failed, continuing without it:", e.message);
+  }
+
+  // 6. Stale Source Check: check if any cited source in findings is stale
   const staleSources = checkStaleSources();
   const staleMap = new Map(staleSources.filter(s => s.is_stale).map(s => [s.source_id, s]));
-  
+
   for (const f of allFindings) {
     if (f.source_id && staleMap.has(f.source_id)) {
       const stale = staleMap.get(f.source_id);
       f.stale_warning = "Underlying source (" + stale.source_id + " - " + stale.title + ") expired on " + stale.last_verified_date + " and is pending review.";
     }
   }
-
-  // 6. AI Semantic Judgment (Gemini or heuristic fallback)
-  const aiFindings = await checkSemanticAI(text, allFindings);
-  allFindings.push(...aiFindings);
 
   // Deduplicate findings by rule_ref and flagged_text
   const seen = new Set();
