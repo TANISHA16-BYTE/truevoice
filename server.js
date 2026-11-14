@@ -131,6 +131,10 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------------
     // Auth Routes
     // ----------------------------------------------------
+    if (pathname === "/api/auth/signup" && method === "POST") {
+      const resp = authCtrl.signup(body);
+      return sendJson(res, resp.status, resp.data);
+    }
     if (pathname === "/api/auth/login" && method === "POST") {
       const resp = authCtrl.login(body);
       return sendJson(res, resp.status, resp.data);
@@ -138,6 +142,36 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/auth/me" && method === "GET") {
       const resp = authCtrl.getMe(currentUser);
       return sendJson(res, resp.status, resp.data);
+    }
+
+    // ----------------------------------------------------
+    // Central Authentication & Role Guards
+    // ----------------------------------------------------
+    const protectedPath =
+      pathname === "/api/check" ||
+      pathname === "/api/check/batch" ||
+      pathname === "/api/upload" ||
+      pathname === "/api/drafts" ||
+      pathname.startsWith("/api/drafts/") ||
+      pathname === "/api/clash/posts" ||
+      pathname === "/api/ai-mistakes" ||
+      pathname === "/api/audit-logs/export";
+
+    if (protectedPath && !currentUser) {
+      return sendJson(res, 401, { error: "Authentication required." });
+    }
+
+    const reviewerOnly =
+      pathname === "/api/audit-logs/export" ||
+      (pathname === "/api/ai-mistakes" && method === "GET");
+
+    if (
+      reviewerOnly &&
+      !["reviewer", "admin"].includes(currentUser?.role)
+    ) {
+      return sendJson(res, 403, {
+        error: "Reviewer or admin permission required."
+      });
     }
 
     // ----------------------------------------------------
@@ -164,14 +198,14 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/drafts" && method === "GET") {
-      const resp = draftsCtrl.listDrafts(query);
+      const resp = draftsCtrl.listDrafts(query, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
     // Draft specific subroutes: /api/drafts/:id/...
     const draftDetailMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)$/);
     if (draftDetailMatch && method === "GET") {
-      const resp = draftsCtrl.getDraftDetails(draftDetailMatch[1]);
+      const resp = draftsCtrl.getDraftDetails(draftDetailMatch[1], currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
@@ -337,7 +371,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 404, { error: "Route " + method + " " + pathname + " not found" });
   } catch (err) {
     console.error("Internal Server Error:", err);
-    return sendJson(res, 500, { error: "Internal server error", details: err.message });
+    return sendJson(res, 500, { error: "Internal server error" });
   }
 });
 
