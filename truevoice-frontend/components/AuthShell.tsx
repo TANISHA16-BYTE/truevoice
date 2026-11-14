@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Logo from "./Logo";
 
 // Shared styles so login and signup look the same.
 export const fieldClass =
@@ -17,40 +18,18 @@ export default function AuthShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-2">
-      <aside className="hidden flex-col justify-center gap-8 bg-[var(--tv-brand)] p-12 text-white lg:flex">
-        <h2 className="max-w-md text-4xl font-semibold">Check it before you publish it.</h2>
-        <p className="max-w-md text-lg text-white/90">
-          TrueVoice compares a draft with your approved facts, prices and rules. Every finding shows
-          its source, and a person makes the final decision.
-        </p>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[var(--tv-brand-ink)] p-6">
+      <Logo className="text-3xl text-[var(--tv-champagne)]" />
 
-        <figure
-          aria-label="Example finding"
-          className="max-w-md rounded-lg bg-white p-5 text-[var(--tv-ink)]"
-        >
-          <p className="text-sm text-[var(--tv-muted)]">Draft</p>
-          <p className="mt-1">
-            Launching Friday with{" "}
-            <s className="decoration-[var(--tv-flag)] decoration-2">flat 30% off</s>!
-          </p>
-          <p className="mt-4 font-semibold text-[var(--tv-flag)]">Offer doesn&rsquo;t match</p>
-          <p className="mt-1 text-sm">
-            Source: approved offer sheet says 20% off, valid 20&ndash;30 Nov 2026.
-          </p>
-          <p className="mt-1 text-sm">Suggested fix: &ldquo;Flat 20% off.&rdquo;</p>
-          <figcaption className="mt-4 text-xs text-[var(--tv-muted)]">Example with demo data</figcaption>
-        </figure>
-      </aside>
+      <div className="w-full max-w-md rounded-2xl border-t-8 border-[var(--tv-champagne)] bg-[var(--tv-paper)] p-8">
+        <h1 className="text-3xl font-semibold">{title}</h1>
+        <p className="mt-2 text-[var(--tv-muted)]">{subtitle}</p>
+        <div className="mt-6">{children}</div>
+      </div>
 
-      <main className="flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-sm">
-          <p className="font-serif text-2xl font-semibold text-[var(--tv-brand)]">TrueVoice</p>
-          <h1 className="mt-8 text-3xl font-semibold">{title}</h1>
-          <p className="mt-2 text-[var(--tv-muted)]">{subtitle}</p>
-          <div className="mt-6">{children}</div>
-        </div>
-      </main>
-    </div>
+      <p className="font-serif text-xl text-[var(--tv-champagne)]">
+        Check it before you publish it.
+      </p>
+    </main>
   );
 }

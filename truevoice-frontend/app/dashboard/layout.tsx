@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
+import TopNav from "@/components/TopNav";
 import { api, ApiError } from "@/lib/api";
 import { clearSession, getSession, type Session } from "@/lib/session";
 import { SessionContext } from "@/lib/SessionContext";
@@ -41,9 +41,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext.Provider value={session}>
-      <div className="min-h-screen md:flex">
-        <Sidebar onLogout={handleLogout} />
-        <main className="flex-1 p-6 md:p-10">{children}</main>
+      <div className="min-h-screen">
+        <TopNav onLogout={handleLogout} />
+        <main className="p-6 md:p-10">{children}</main>
       </div>
     </SessionContext.Provider>
   );

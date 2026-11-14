@@ -1,15 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --tv-ink: #13262b;
-  --tv-muted: #52646a;
-  --tv-paper: #f5f7f6;
-  --tv-line: #d5dedc;
-  --tv-edge: #7c8d91;
-  --tv-brand: #0e5c57;
-  --tv-brand-ink: #0a4540;
-  --tv-flag: #b42318;
-  --tv-ok: #1e7b46;
+  --tv-ink: #2a1520;
+  --tv-muted: #6b5560;
+  --tv-paper: #f7f2ea;
+  --tv-line: #e3d6c6;
+  --tv-edge: #8a7580;
+  --tv-brand: #6e1f3d;
+  --tv-brand-ink: #4a1228;
+  --tv-champagne: #d9bc98;
+  --tv-flag: #9b1c13;
+  --tv-ok: #1f6b3a;
 }
 
 @layer base {
