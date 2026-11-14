@@ -66,10 +66,10 @@ function checkScheduleClashes(draft) {
   const rawText = draft.content || "";
   const content = rawText.toLowerCase();
   const scheduledPosts = db.query("SELECT * FROM scheduled_posts");
-  const prices = db.query("SELECT * FROM prices");
+  const prices = db.query("SELECT * FROM prices WHERE archived = 0");
 
   // Official launch date from facts is 2026-11-20 (Friday 20 Nov)
-  const officialLaunchFact = db.get("SELECT fact_value FROM facts WHERE fact_key = 'launch_date' AND product_code = 'GV-SER-30'");
+  const officialLaunchFact = db.get("SELECT fact_value FROM facts WHERE fact_key = 'launch_date' AND product_code = 'GV-SER-30' AND status = 'active'");
   const officialLaunch = officialLaunchFact ? officialLaunchFact.fact_value : "2026-11-20";
   const defaultYear = officialLaunch.slice(0, 4);
 
