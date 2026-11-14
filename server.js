@@ -219,7 +219,20 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/facts" && method === "GET") {
-      const resp = libraryCtrl.getFacts();
+      const resp = libraryCtrl.getFacts(query);
+      return sendJson(res, resp.status, resp.data);
+    }
+    if (pathname === "/api/library/facts" && method === "POST") {
+      const resp = libraryCtrl.createFact(body, currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
+    const factMatch = pathname.match(/^\/api\/library\/facts\/([A-Za-z0-9_-]+)$/);
+    if (factMatch && method === "PUT") {
+      const resp = libraryCtrl.updateFact(factMatch[1], body, currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
+    if (factMatch && method === "DELETE") {
+      const resp = libraryCtrl.archiveFact(factMatch[1], currentUser);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/prices" && method === "GET") {
