@@ -1,64 +1,79 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import Logo from "./Logo";
 import { useSession } from "@/lib/SessionContext";
 
-const links = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/library", label: "Library" },
-  { href: "/dashboard/submit", label: "Submit draft" },
-  { href: "/dashboard/review", label: "Review queue" },
+const NAV_ITEMS = [
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Library", href: "/dashboard/library" },
+  { label: "Submit draft", href: "/dashboard/submit" },
+  { label: "Review queue", href: "/dashboard/review" },
+  { label: "Health", href: "/dashboard/health" },
 ];
 
 export default function TopNav({ onLogout }: { onLogout: () => void }) {
   const pathname = usePathname();
   const { user } = useSession();
 
+  const displayName = user?.name || "User";
+  const displayRole = user?.role || "member";
+  const initial = (displayName.trim().charAt(0) || "U").toUpperCase();
+
+  const activeIdx = Math.max(
+    0,
+    NAV_ITEMS.findIndex((item) =>
+      item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href)
+    )
+  );
+
   return (
-    <header className="border-b border-[var(--tv-champagne)]/25 bg-[var(--tv-brand)] px-6 py-3.5 text-[var(--tv-paper)] shadow-sm md:px-10">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-        <Link href="/dashboard" className="rounded-md focus-visible:outline-offset-4">
-          <Logo className="text-xl text-[var(--tv-champagne)]" />
-        </Link>
+    <header className="sticky top-0 z-40 bg-gradient-to-r from-[var(--tv-brand-ink)] via-[var(--tv-brand)] to-[#54162e] text-[var(--tv-paper)] shadow-md">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3.5">
+        <Link href="/dashboard" className="flex items-center gap-2.5 text-[var(--tv-champagne)]">
+        <Logo />
+      </Link>
 
         <nav
-          aria-label="Main"
-          className="flex items-center gap-1 overflow-x-auto rounded-full bg-[var(--tv-brand-ink)]/60 p-1 ring-1 ring-[var(--tv-champagne)]/20"
+          aria-label="Primary"
+          className="relative hidden grid-cols-5 rounded-full bg-black/25 p-1 lg:grid"
         >
-          {links.map((link) => {
-            const active = pathname === link.href;
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/5)] rounded-full bg-[var(--tv-champagne)] shadow-sm transition-transform duration-300 ease-out motion-reduce:transition-none"
+            style={{ transform: `translateX(${activeIdx * 100}%)` }}
+          />
+          {NAV_ITEMS.map((item, idx) => {
+            const isActive = idx === activeIdx;
             return (
               <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? "page" : undefined}
-                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm transition ${
-                  active
-                    ? "bg-[var(--tv-champagne)] font-semibold text-[var(--tv-brand-ink)] shadow-sm"
-                    : "text-[var(--tv-paper)]/90 hover:bg-white/10 hover:text-white"
+                key={item.href}
+                href={item.href}
+                className={`relative z-10 min-w-[96px] rounded-full px-3 py-1.5 text-center text-sm font-medium transition-colors duration-200 ${
+                  isActive ? "text-[var(--tv-brand-ink)]" : "text-[var(--tv-paper)]/85 hover:text-white"
                 }`}
               >
-                {link.label}
+                {item.label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="flex items-center gap-3 text-sm">
-          <div className="hidden items-center gap-2 rounded-full bg-[var(--tv-brand-ink)]/50 px-3 py-1.5 ring-1 ring-[var(--tv-champagne)]/20 sm:flex">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--tv-champagne)] text-xs font-bold uppercase text-[var(--tv-brand-ink)]">
-              {user.name.slice(0, 1)}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--tv-champagne)] font-semibold text-[var(--tv-brand-ink)]">
+              {initial}
             </span>
-            <span className="font-medium text-[var(--tv-paper)]">{user.name}</span>
-            <span className="capitalize text-[var(--tv-champagne)]">&middot; {user.role}</span>
+            <span className="hidden font-medium sm:inline">
+              {displayName} &middot;{" "}
+              <span className="capitalize text-[var(--tv-champagne)]">{displayRole}</span>
+            </span>
           </div>
-
           <button
             type="button"
             onClick={onLogout}
-            className="rounded-lg border border-[var(--tv-champagne)]/50 px-3.5 py-1.5 font-medium text-[var(--tv-champagne)] transition hover:bg-white/10"
+            className="rounded-lg border border-white/25 px-3 py-1.5 text-xs font-medium transition hover:bg-white/15 active:scale-95"
           >
             Log out
           </button>
