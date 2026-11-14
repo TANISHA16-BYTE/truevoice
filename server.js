@@ -270,19 +270,19 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/prices" && method === "GET") {
-      const resp = libraryCtrl.getPrices();
+      const resp = libraryCtrl.getPrices(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/offers" && method === "GET") {
-      const resp = libraryCtrl.getOffers();
+      const resp = libraryCtrl.getOffers(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/claims" && method === "GET") {
-      const resp = libraryCtrl.getClaims();
+      const resp = libraryCtrl.getClaims(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/terms" && method === "GET") {
-      const resp = libraryCtrl.getTerms();
+      const resp = libraryCtrl.getTerms(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/rules" && method === "GET") {
@@ -296,6 +296,23 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/library/regional-notes" && method === "GET") {
       const resp = libraryCtrl.getRegionalNotes();
       return sendJson(res, resp.status, resp.data);
+    }
+        const libraryItemMatch = pathname.match(/^\/api\/library\/(prices|offers|claims|terms)(?:\/([A-Za-z0-9_-]+))?$/);
+    if (libraryItemMatch) {
+      const kind = libraryItemMatch[1];
+      const itemId = libraryItemMatch[2];
+      if (!itemId && method === "POST") {
+        const resp = libraryCtrl.createItem(kind, body, currentUser);
+        return sendJson(res, resp.status, resp.data);
+      }
+      if (itemId && method === "PUT") {
+        const resp = libraryCtrl.updateItem(kind, itemId, body, currentUser);
+        return sendJson(res, resp.status, resp.data);
+      }
+      if (itemId && method === "DELETE") {
+        const resp = libraryCtrl.archiveItem(kind, itemId, currentUser);
+        return sendJson(res, resp.status, resp.data);
+      }
     }
 
     // ----------------------------------------------------

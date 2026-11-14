@@ -75,7 +75,7 @@ function checkExactRules(text, metadata = {}) {
   // ----------------------------------------------------
   // 1. TERMINOLOGY CHECKS (Banned & Retired Terms)
   // ----------------------------------------------------
-  const terms = db.query("SELECT * FROM terms");
+  const terms = db.query("SELECT * FROM terms WHERE archived = 0");
   for (const t of terms) {
     const termLower = t.term.toLowerCase();
     const termVariants = termLower.split("/").map(v => v.trim()).filter(Boolean);
@@ -100,7 +100,7 @@ function checkExactRules(text, metadata = {}) {
   // ----------------------------------------------------
   // 2. CLAIMS CHECKS (Approved, Restricted, Prohibited)
   // ----------------------------------------------------
-  const claims = db.query("SELECT * FROM claims");
+  const claims = db.query("SELECT * FROM claims WHERE archived = 0");
   for (const c of claims) {
     const claimLower = c.claim_text.toLowerCase();
     const claimVariants = claimLower.split("/").map(v => v.trim()).filter(Boolean);
@@ -186,7 +186,7 @@ function checkExactRules(text, metadata = {}) {
   // ----------------------------------------------------
   // 3. PRICING CHECKS (Outdated & Incorrect Prices)
   // ----------------------------------------------------
-  const prices = db.query("SELECT * FROM prices");
+  const prices = db.query("SELECT * FROM prices WHERE archived = 0");
   const matchedProducts = prices.filter((p) => {
     const productLower = p.product_name.toLowerCase();
     const codeLower = p.product_code.toLowerCase();
@@ -267,7 +267,7 @@ function checkExactRules(text, metadata = {}) {
     });
   }
 
-  const offers = db.query("SELECT * FROM offers");
+  const offers = db.query("SELECT * FROM offers WHERE archived = 0");
   const demoDate = config.DEMO_DATE || "2026-11-13";
   const explicitDates = extractOfferCheckDates(text, demoDate.slice(0, 4));
   const scheduledDate = metadata.scheduled_for ? String(metadata.scheduled_for).slice(0, 10) : null;

@@ -2,20 +2,9 @@
 const db = require("../db/database");
 const { checkStaleSources } = require("../services/staleKnowledgeService");
 
-// NEW: facts get an owner and a status ("active" or "archived").
-// This adds the two columns once, if they are missing. It is safe to run on every start.
-function ensureFactColumns() {
-  const columns = db.query("PRAGMA table_info(facts)").map((c) => c.name);
-  if (!columns.includes("owner")) {
-    db.exec("ALTER TABLE facts ADD COLUMN owner TEXT");
-  }
-  if (!columns.includes("status")) {
-    db.exec("ALTER TABLE facts ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
-  }
-}
-ensureFactColumns();
+// The extra columns (owner, status, archived, last_checked) are added in src/db/database.js.
 
-// NEW: only reviewers and admins may change the library.
+// Only reviewers and admins may change the library.
 const EDITOR_ROLES = ["reviewer", "admin"];
 
 function requireEditor(user) {
@@ -36,11 +25,18 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// "No source, no fact": a fact may only cite a source that exists in the sources table.
+// "No source, no fact": a cited source must exist in the sources table.
 function sourceExists(sourceId) {
   return Boolean(db.get("SELECT source_id FROM sources WHERE source_id = ?", [sourceId]));
 }
 
+function ruleExists(ruleId) {
+  return Boolean(db.get("SELECT rule_id FROM rules WHERE rule_id = ?", [ruleId]));
+}
+
+// ---------------------------------------------------------------
+// FACTS (add, edit, archive)
+// ---------------------------------------------------------------
 function nextFactId() {
   const rows = db.query("SELECT fact_id FROM facts");
   let max = 0;
@@ -56,7 +52,7 @@ function getSources() {
   return { status: 200, data: { sources } };
 }
 
-// CHANGED: archived facts are hidden unless you ask for them with ?status=all
+// Archived facts are hidden unless you ask for them with ?status=all
 function getFacts(query = {}) {
   const facts =
     query.status === "all"
@@ -65,7 +61,6 @@ function getFacts(query = {}) {
   return { status: 200, data: { facts } };
 }
 
-// NEW: add a fact
 function createFact(body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
@@ -96,7 +91,6 @@ function createFact(body, user) {
   return { status: 201, data: { fact: db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-// NEW: edit a fact (only the fields you send are changed; "last checked" is updated)
 function updateFact(factId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
@@ -140,7 +134,6 @@ function updateFact(factId, body, user) {
   return { status: 200, data: { fact: db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-// NEW: archive a fact (it is hidden, not deleted, so the history stays)
 function archiveFact(factId, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
@@ -154,24 +147,298 @@ function archiveFact(factId, user) {
   return { status: 200, data: { fact: db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-function getPrices() {
-  const prices = db.query("SELECT * FROM prices ORDER BY current_price_inr DESC");
-  return { status: 200, data: { prices } };
+// ---------------------------------------------------------------
+// PRICES, OFFERS, CLAIMS, TERMS (add, edit, archive)
+// One shared set of functions, with one description per kind.
+// ---------------------------------------------------------------
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const KINDS = {
+  prices: {
+    singular: "price",
+    table: "prices",
+    idColumn: "price_id",
+    prefix: "PR",
+    orderBy: "current_price_inr DESC",
+    fields: {
+      product_code: { type: "text", max: 40, required: true },
+      product_name: { type: "text", max: 80, required: true },
+      current_price_inr: { type: "int", min: 1, required: true },
+      old_price_inr: { type: "int", min: 0, required: false },
+      effective_date: { type: "date", required: false, default: today },
+      source_id: { type: "source", required: true }
+    },
+    check(values, selfId) {
+      const clash = db.get(
+        "SELECT price_id FROM prices WHERE product_code = ? AND archived = 0 AND price_id != ?",
+        [values.product_code, selfId]
+      );
+      if (clash) {
+        return "An active price for " + values.product_code + " already exists (" + clash.price_id + "). Edit it instead.";
+      }
+      return null;
+    },
+    // When the current price changes, the previous one becomes the "old price"
+    // (so the outdated-price check keeps working), unless you send old_price_inr yourself.
+    onUpdate(existing, body, values) {
+      if (body.current_price_inr !== undefined && values.current_price_inr !== existing.current_price_inr) {
+        if (body.old_price_inr === undefined) values.old_price_inr = existing.current_price_inr;
+        if (body.effective_date === undefined) values.effective_date = today();
+      }
+    }
+  },
+
+  offers: {
+    singular: "offer",
+    table: "offers",
+    idColumn: "offer_id",
+    prefix: "OFF",
+    orderBy: "status ASC, offer_id ASC",
+    fields: {
+      code: { type: "text", max: 40, required: true, upper: true },
+      title: { type: "text", max: 120, required: true },
+      discount_pct: { type: "int", min: 0, max: 100, required: true },
+      applies_to: { type: "text", max: 80, required: true },
+      valid_from: { type: "date", required: true },
+      valid_to: { type: "date", required: true },
+      max_discount_inr: { type: "int", min: 0, required: false },
+      status: { type: "enum", options: ["active", "expired"], required: false, default: "active" }
+    },
+    check(values, selfId) {
+      if (values.valid_from > values.valid_to) {
+        return "valid_from must not be after valid_to.";
+      }
+      const clash = db.get(
+        "SELECT offer_id FROM offers WHERE code = ? AND archived = 0 AND offer_id != ?",
+        [values.code, selfId]
+      );
+      if (clash) {
+        return "An active offer with code " + values.code + " already exists (" + clash.offer_id + ").";
+      }
+      return null;
+    }
+  },
+
+  claims: {
+    singular: "claim",
+    table: "claims",
+    idColumn: "claim_id",
+    prefix: "C",
+    orderBy: "status ASC, claim_id ASC",
+    fields: {
+      claim_text: { type: "text", max: 300, required: true },
+      status: { type: "claimStatus", required: true },
+      applies_to: { type: "text", max: 80, required: true },
+      required_evidence: { type: "text", max: 300, required: false },
+      source_id: { type: "source", required: false },
+      rule_ref: { type: "rule", required: false },
+      safe_alternative: { type: "text", max: 300, required: false }
+    },
+    check(values) {
+      if (values.status.startsWith("approved") && !values.source_id) {
+        return "An approved claim needs a source_id. No source, no approved claim.";
+      }
+      return null;
+    }
+  },
+
+  terms: {
+    singular: "term",
+    table: "terms",
+    idColumn: "term_id",
+    prefix: "T",
+    orderBy: "category ASC, term_id ASC",
+    fields: {
+      term: { type: "text", max: 120, required: true },
+      category: { type: "enum", options: ["banned", "retired"], required: true },
+      replacement: { type: "text", max: 200, required: true },
+      reason: { type: "text", max: 300, required: true },
+      rule_ref: { type: "rule", required: true }
+    }
+  }
+};
+
+// Reads one field from the request, checks it, and returns { value } or { error }.
+function readField(name, spec, raw) {
+  if (typeof raw === "string") raw = raw.trim();
+
+  if (raw === undefined || raw === null || raw === "") {
+    if (spec.required) return { error: name + " is required." };
+    const fallback = typeof spec.default === "function" ? spec.default() : spec.default;
+    return { value: fallback !== undefined ? fallback : null };
+  }
+
+  switch (spec.type) {
+    case "text": {
+      const value = typeof raw === "string" ? raw.slice(0, spec.max) : "";
+      if (!value) return { error: name + " must be text." };
+      return { value: spec.upper ? value.toUpperCase() : value };
+    }
+    case "int": {
+      const n = typeof raw === "number" || typeof raw === "string" ? Number(raw) : NaN;
+      const max = spec.max !== undefined ? spec.max : Infinity;
+      if (!Number.isInteger(n) || n < spec.min || n > max) {
+        const range = spec.max !== undefined ? " from " + spec.min + " to " + spec.max : " of at least " + spec.min;
+        return { error: name + " must be a whole number" + range + "." };
+      }
+      return { value: n };
+    }
+    case "date": {
+      if (typeof raw !== "string" || !DATE_RE.test(raw) || Number.isNaN(Date.parse(raw))) {
+        return { error: name + " must be a date like 2026-11-20." };
+      }
+      return { value: raw };
+    }
+    case "enum": {
+      if (!spec.options.includes(raw)) {
+        return { error: name + " must be one of: " + spec.options.join(", ") + "." };
+      }
+      return { value: raw };
+    }
+    case "claimStatus": {
+      if (typeof raw !== "string" || !/^(approved|restricted|prohibited)/.test(raw)) {
+        return { error: name + " must start with approved, restricted or prohibited." };
+      }
+      return { value: raw.slice(0, 120) };
+    }
+    case "source": {
+      if (typeof raw !== "string" || !sourceExists(raw)) {
+        return { error: "Unknown source_id: " + raw };
+      }
+      return { value: raw };
+    }
+    case "rule": {
+      if (typeof raw !== "string" || !ruleExists(raw)) {
+        return { error: "Unknown rule_ref: " + raw + ". See GET /api/library/rules for valid ones." };
+      }
+      return { value: raw };
+    }
+    default:
+      return { error: name + " has an unsupported type." };
+  }
 }
 
-function getOffers() {
-  const offers = db.query("SELECT * FROM offers ORDER BY status ASC");
-  return { status: 200, data: { offers } };
+function nextId(def) {
+  const rows = db.query("SELECT " + def.idColumn + " AS id FROM " + def.table);
+  const pattern = new RegExp("^" + def.prefix + "-(\\d+)$");
+  let max = 0;
+  for (const row of rows) {
+    const match = pattern.exec(row.id);
+    if (match) max = Math.max(max, parseInt(match[1], 10));
+  }
+  return def.prefix + "-" + String(max + 1).padStart(2, "0");
 }
 
-function getClaims() {
-  const claims = db.query("SELECT * FROM claims ORDER BY status ASC");
-  return { status: 200, data: { claims } };
+function listKind(kind, query = {}) {
+  const def = KINDS[kind];
+  const where = query.status === "all" ? "" : " WHERE archived = 0";
+  const items = db.query("SELECT * FROM " + def.table + where + " ORDER BY " + def.orderBy);
+  return { status: 200, data: { [def.table]: items } };
 }
 
-function getTerms() {
-  const terms = db.query("SELECT * FROM terms ORDER BY category ASC");
-  return { status: 200, data: { terms } };
+function createItem(kind, body, user) {
+  const denied = requireEditor(user);
+  if (denied) return denied;
+
+  const def = KINDS[kind];
+  if (!def) return { status: 404, data: { error: "Unknown library item type." } };
+
+  const values = {};
+  for (const [name, spec] of Object.entries(def.fields)) {
+    const result = readField(name, spec, body ? body[name] : undefined);
+    if (result.error) return { status: 400, data: { error: result.error } };
+    values[name] = result.value;
+  }
+
+  const problem = def.check ? def.check(values, "") : null;
+  if (problem) return { status: 400, data: { error: problem } };
+
+  const id = nextId(def);
+  const owner = cleanText(body && body.owner, 80) || user.name || user.id || "unknown";
+  const names = Object.keys(def.fields);
+  const columns = [def.idColumn, ...names, "owner", "last_checked"];
+  const params = [id, ...names.map((n) => values[n]), owner, today()];
+
+  db.run(
+    "INSERT INTO " + def.table + " (" + columns.join(", ") + ") VALUES (" + columns.map(() => "?").join(", ") + ")",
+    params
+  );
+
+  const row = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
+  return { status: 201, data: { [def.singular]: row } };
+}
+
+function updateItem(kind, itemId, body, user) {
+  const denied = requireEditor(user);
+  if (denied) return denied;
+
+  const def = KINDS[kind];
+  if (!def) return { status: 404, data: { error: "Unknown library item type." } };
+
+  const existing = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
+  if (!existing) return { status: 404, data: { error: itemId + " not found." } };
+  if (existing.archived === 1) {
+    return { status: 409, data: { error: itemId + " is archived and cannot be edited." } };
+  }
+
+  const values = {};
+  for (const [name, spec] of Object.entries(def.fields)) {
+    if (body && body[name] !== undefined) {
+      const result = readField(name, spec, body[name]);
+      if (result.error) return { status: 400, data: { error: result.error } };
+      values[name] = result.value;
+    } else {
+      values[name] = existing[name];
+    }
+  }
+
+  if (def.onUpdate) def.onUpdate(existing, body || {}, values);
+
+  const problem = def.check ? def.check(values, itemId) : null;
+  if (problem) return { status: 400, data: { error: problem } };
+
+  const owner = body && body.owner !== undefined ? cleanText(body.owner, 80) || existing.owner : existing.owner;
+  const names = Object.keys(def.fields);
+  const setClause = [...names, "owner", "last_checked"].map((c) => c + " = ?").join(", ");
+  const params = [...names.map((n) => values[n]), owner || null, today(), itemId];
+
+  db.run("UPDATE " + def.table + " SET " + setClause + " WHERE " + def.idColumn + " = ?", params);
+
+  const row = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
+  return { status: 200, data: { [def.singular]: row } };
+}
+
+// Archive = hide, not delete, so the history stays.
+function archiveItem(kind, itemId, user) {
+  const denied = requireEditor(user);
+  if (denied) return denied;
+
+  const def = KINDS[kind];
+  if (!def) return { status: 404, data: { error: "Unknown library item type." } };
+
+  const existing = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
+  if (!existing) return { status: 404, data: { error: itemId + " not found." } };
+
+  db.run("UPDATE " + def.table + " SET archived = 1, last_checked = ? WHERE " + def.idColumn + " = ?", [today(), itemId]);
+
+  const row = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
+  return { status: 200, data: { [def.singular]: row } };
+}
+
+function getPrices(query) {
+  return listKind("prices", query);
+}
+
+function getOffers(query) {
+  return listKind("offers", query);
+}
+
+function getClaims(query) {
+  return listKind("claims", query);
+}
+
+function getTerms(query) {
+  return listKind("terms", query);
 }
 
 function getRules() {
@@ -199,6 +466,9 @@ module.exports = {
   getOffers,
   getClaims,
   getTerms,
+  createItem,
+  updateItem,
+  archiveItem,
   getRules,
   getProtectedNames,
   getRegionalNotes

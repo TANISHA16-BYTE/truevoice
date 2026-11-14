@@ -198,8 +198,9 @@ function explainFinding(draftId, findingId, body, user) {
   const access = findAuthorizedDraft(draftId, user, ["creator"]);
   if (access.error) return access.error;
 
-  const { explanation } = body || {};
-  if (!explanation || typeof explanation !== "string") {
+  const explanation =
+    typeof (body && body.explanation) === "string" ? body.explanation.trim().slice(0, 500) : "";
+  if (!explanation) {
     return failure(400, "Explanation text is required.");
   }
 
@@ -208,6 +209,23 @@ function explainFinding(draftId, findingId, body, user) {
     [findingId, draftId]
   );
   if (!finding) return failure(404, "Finding not found for this draft.");
+
+  // Finished findings cannot be explained any more.
+  if (finding.status === "accepted" || finding.status === "dismissed") {
+    return failure(409, "This finding is already " + finding.status + ".");
+  }
+
+  // One-chance rule: a second explanation is refused, and the creator is sent to a human.
+  if (finding.status === "explained" || finding.creator_explanation) {
+    return {
+      status: 409,
+      data: {
+        error: "You have already used your one chance to explain this finding. Hand it over to a human manager.",
+        chances_left: 0,
+        next_step: "handover"
+      }
+    };
+  }
 
   db.run(
     "UPDATE findings SET creator_explanation = ?, status = 'explained' WHERE id = ?",
@@ -219,7 +237,16 @@ function explainFinding(draftId, findingId, body, user) {
     "Creator explained finding " + findingId + ": " + explanation
   );
 
-  return { status: 200, data: { success: true, message: "Context explanation recorded." } };
+  return {
+    status: 200,
+    data: {
+      success: true,
+      finding_id: findingId,
+      chances_left: 0,
+      next_step: "handover",
+      message: "Context explanation recorded. You have no more chances to explain this finding. You can hand the draft over to a human manager."
+    }
+  };
 }
 
 function handoverToManager(draftId, body, user) {

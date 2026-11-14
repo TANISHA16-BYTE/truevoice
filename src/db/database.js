@@ -18,6 +18,20 @@ function getDb() {
       const schemaSql = fs.readFileSync(schemaPath, "utf-8");
       dbInstance.exec(schemaSql);
     }
+        // Library management columns (safe to run on every start)
+    const addColumnIfMissing = (table, column, definition) => {
+      const cols = dbInstance.prepare("PRAGMA table_info(" + table + ")").all().map((c) => c.name);
+      if (!cols.includes(column)) {
+        dbInstance.exec("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+      }
+    };
+    addColumnIfMissing("facts", "owner", "TEXT");
+    addColumnIfMissing("facts", "status", "TEXT NOT NULL DEFAULT 'active'");
+    for (const table of ["prices", "offers", "claims", "terms"]) {
+      addColumnIfMissing(table, "owner", "TEXT");
+      addColumnIfMissing(table, "archived", "INTEGER NOT NULL DEFAULT 0");
+      addColumnIfMissing(table, "last_checked", "TEXT");
+    }
   }
   return dbInstance;
 }
