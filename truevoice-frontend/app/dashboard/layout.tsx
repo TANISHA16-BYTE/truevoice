@@ -1,34 +1,55 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import TopNav from "@/components/TopNav";
 import { api, ApiError } from "@/lib/api";
-import { clearSession, getSession, type Session } from "@/lib/session";
+import { clearSession, getSession } from "@/lib/session";
 import { SessionContext } from "@/lib/SessionContext";
 
-// Every page inside /dashboard goes through here, so this is where we
-// make sure the person is logged in.
+const SESSION_KEY = "truevoice_session";
+
+function subscribeToSession(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+
+function getSessionSnapshot(): string | null {
+  try {
+    return window.localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function getServerSessionSnapshot(): null {
+  return null;
+}
+
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [session, setSession] = useState<Session | null>(null);
+
+  const sessionRaw = useSyncExternalStore(
+    subscribeToSession,
+    getSessionSnapshot,
+    getServerSessionSnapshot
+  );
+
+  const session = sessionRaw ? getSession() : null;
 
   useEffect(() => {
-    const saved = getSession();
-    if (!saved) {
+    if (!sessionRaw || !session) {
       router.replace("/login");
       return;
     }
-    setSession(saved);
 
-    // If the saved token has expired, send them back to log in again.
     api("/auth/me").catch((err) => {
       if (err instanceof ApiError && err.status === 401) {
         clearSession();
         router.replace("/login");
       }
     });
-  }, [router]);
+  }, [sessionRaw, session, router]);
 
   function handleLogout() {
     clearSession();

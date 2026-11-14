@@ -5,12 +5,39 @@ const config = require("../src/config");
 const { checkExactRules } = require("../src/services/exactRulesEngine");
 const EventEmitter = require("events");
 
+let creatorTokenForTests = null;
+let reviewerTokenForTests = null;
+
 function invokeRoute(method, urlStr, headers = {}, body = null) {
   return new Promise((resolve) => {
     const req = new EventEmitter();
     req.method = method;
     req.url = urlStr;
+
+    const pathname = urlStr.split("?")[0];
+    const protectedPath =
+      pathname === "/api/check" ||
+      pathname === "/api/check/batch" ||
+      pathname === "/api/upload" ||
+      pathname === "/api/drafts" ||
+      pathname.startsWith("/api/drafts/") ||
+      pathname === "/api/clash/posts" ||
+      pathname === "/api/ai-mistakes" ||
+      pathname === "/api/audit-logs/export";
+
+    const reviewerOnly =
+      pathname === "/api/audit-logs/export" ||
+      (pathname === "/api/ai-mistakes" && method === "GET");
+
+    const automaticToken = reviewerOnly
+      ? reviewerTokenForTests
+      : creatorTokenForTests;
+
     req.headers = { ...headers };
+
+    if (protectedPath && automaticToken && !req.headers.authorization) {
+      req.headers.authorization = "Bearer " + automaticToken;
+    }
 
     let resHeaders = {};
     let statusCode = 200;
@@ -73,6 +100,7 @@ async function runApiTests() {
     });
     if (creatorLogin.status !== 200 || !creatorLogin.data.token) throw new Error("Creator login failed");
     const creatorToken = creatorLogin.data.token;
+    creatorTokenForTests = creatorToken;
     console.log("  -> Passed. Logged in Tanisha Jain (Role: " + creatorLogin.data.user.role + ")");
 
     const reviewerLogin = await invokeRoute("POST", "/api/auth/login", { "content-type": "application/json" }, {
@@ -80,6 +108,7 @@ async function runApiTests() {
       password: "reviewer123"
     });
     const reviewerToken = reviewerLogin.data.token;
+    reviewerTokenForTests = reviewerToken;
     console.log("  -> Passed. Logged in Riddhi Sharma (Role: " + reviewerLogin.data.user.role + ")");
 
     console.log("\n[TEST 5] GET /api/library/sources & Stale Detection");
