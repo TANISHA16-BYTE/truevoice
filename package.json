@@ -4,7 +4,7 @@
   "description": "TrueVoice: Content Safety Check & Verification API before publication",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --env-file-if-exists=.env server.js",
     "dev": "node --env-file-if-exists=.env --watch server.js",
     "seed": "node src/db/seed.js",
     "test": "node tests/api.test.js",
