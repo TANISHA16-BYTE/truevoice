@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+:root {
+  --tv-ink: #2a1520;
+  --tv-muted: #6b5560;
+  --tv-paper: #f7f2ea;
+  --tv-line: #e3d6c6;
+  --tv-edge: #8a7580;
+  --tv-brand: #6e1f3d;
+  --tv-brand-ink: #4a1228;
+  --tv-champagne: #d9bc98;
+  --tv-flag: #9b1c13;
+  --tv-ok: #1f6b3a;
+}
+
+@layer base {
+  body {
+    background: var(--tv-paper);
+    color: var(--tv-ink);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    line-height: 1.55;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif), Georgia, serif;
+    line-height: 1.2;
+  }
+  :focus-visible {
+    outline: 3px solid var(--tv-brand);
+    outline-offset: 2px;
+  }
+}
