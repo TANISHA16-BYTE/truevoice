@@ -137,15 +137,17 @@ function sanitizeAiFindings(list, text, brandGuide) {
     if (!Number.isFinite(confidence)) confidence = 0.5;
     confidence = Math.min(1, Math.max(0, confidence));
 
+        // Remove a leading "Rule:" the AI sometimes adds, so "Rule: Claims 3.3" becomes "Claims 3.3".
+    const ruleRef = typeof f.rule_ref === "string" ? f.rule_ref.replace(/^rule:\s*/i, "").trim() : "";
+
     // "No source, no finding": the cited rule must exist in the brand guide.
-    const ruleOk =
-      typeof f.rule_ref === "string" && f.rule_ref.length > 0 && (!brandGuide || brandGuide.includes(f.rule_ref));
+    const ruleOk = ruleRef.length > 0 && (!brandGuide || brandGuide.includes(ruleRef));
 
     const finding = {
-      type: f.type || "ai_check",
+      type: f.type === "unverified_claim" ? "unverified_claim" : "ai_check",
       severity: VALID_SEVERITIES.includes(severity) ? severity : "MEDIUM",
       flagged_text: flagged,
-      rule_ref: ruleOk ? f.rule_ref : null,
+      rule_ref: ruleOk ? ruleRef : null,
       source_id: typeof f.source_id === "string" && f.source_id ? f.source_id : null,
       reason: f.reason || "Flagged by AI check.",
       suggested_fix: f.suggested_fix || null,
@@ -182,7 +184,10 @@ async function checkSemanticAI(text, existingFindings = []) {
       const prompt = buildPrompt(text, brandGuide);
       const geminiResult = await callGeminiWithRetry(prompt, config.GEMINI_API_KEY);
       if (Array.isArray(geminiResult)) {
-        const checked = sanitizeAiFindings(geminiResult, text, brandGuide);
+        // Skip AI findings for rules the exact checks already flagged (avoids duplicates).
+        const checked = sanitizeAiFindings(geminiResult, text, brandGuide).filter(
+          (f) => !f.rule_ref || !existingRulesFlagged.has(f.rule_ref)
+        );
         if (checked.length > 0) {
           return checked;
         }
