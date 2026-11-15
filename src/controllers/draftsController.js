@@ -299,7 +299,7 @@ async function handoverToManager(draftId, body, user) {
     "Creator requested human review";
 
   await db.run(
-    "UPDATE drafts SET handover_to_manager = 1, manager_handover_reason = ?, status = 'in_review', updated_at = ? WHERE id = ?",
+    "UPDATE drafts SET handover_to_manager = TRUE, manager_handover_reason = ?, status = 'in_review', updated_at = ? WHERE id = ?",
     [handoverReason, new Date().toISOString(), draftId]
   );
 
