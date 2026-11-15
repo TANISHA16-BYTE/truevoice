@@ -347,7 +347,7 @@ async function createItem(kind, body, user) {
     values[name] = result.value;
   }
 
-  const problem = def.check ? def.check(values, "") : null;
+  const problem = def.check ? await def.check(values, "") : null;
   if (problem) return { status: 400, data: { error: problem } };
 
   const id = await nextId(def);
@@ -381,7 +381,7 @@ async function updateItem(kind, itemId, body, user) {
   const values = {};
   for (const [name, spec] of Object.entries(def.fields)) {
     if (body && body[name] !== undefined) {
-      const result = readField(name, spec, body[name]);
+      const result = await readField(name, spec, body[name]);
       if (result.error) return { status: 400, data: { error: result.error } };
       values[name] = result.value;
     } else {
@@ -391,7 +391,7 @@ async function updateItem(kind, itemId, body, user) {
 
   if (def.onUpdate) def.onUpdate(existing, body || {}, values);
 
-  const problem = def.check ? def.check(values, itemId) : null;
+  const problem = def.check ? await def.check(values, itemId) : null;
   if (problem) return { status: 400, data: { error: problem } };
 
   const owner = body && body.owner !== undefined ? cleanText(body.owner, 80) || existing.owner : existing.owner;
@@ -422,19 +422,19 @@ async function archiveItem(kind, itemId, user) {
 }
 
 async function getPrices(query) {
-  return listKind("prices", query);
+  return await listKind("prices", query);
 }
 
 async function getOffers(query) {
-  return listKind("offers", query);
+  return await listKind("offers", query);
 }
 
 async function getClaims(query) {
-  return listKind("claims", query);
+  return await listKind("claims", query);
 }
 
 async function getTerms(query) {
-  return listKind("terms", query);
+  return await listKind("terms", query);
 }
 
 async function getRules() {
