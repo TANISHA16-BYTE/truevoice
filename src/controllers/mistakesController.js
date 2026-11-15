@@ -12,7 +12,11 @@ function submitAiMistake(body, user) {
     return { status: 403, data: { error: "Only reviewers and admins can report an AI mistake." } };
   }
 
-  const { phrase, region, incorrect_flag, user_correction } = body || {};
+  const input = body || {};
+  const phrase = input.phrase ?? input.flagged_text;
+  const region = input.region ?? input.team_region;
+  const incorrect_flag = input.incorrect_flag ?? input.reason;
+  const user_correction = input.user_correction ?? input.correction;
   if (
     typeof phrase !== "string" || !phrase.trim() ||
     typeof user_correction !== "string" || !user_correction.trim()
