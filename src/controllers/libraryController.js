@@ -256,7 +256,7 @@ const KINDS = {
   }
 };
 
-function readField(name, spec, raw) {
+async function readField(name, spec, raw) {
   if (typeof raw === "string") raw = raw.trim();
 
   if (raw === undefined || raw === null || raw === "") {
@@ -299,13 +299,13 @@ function readField(name, spec, raw) {
       return { value: raw.slice(0, 120) };
     }
     case "source": {
-      if (typeof raw !== "string" || !sourceExists(raw))) {
+      if (typeof raw !== "string" || !(await sourceExists(raw))) {
         return { error: "Unknown source_id: " + raw };
       }
       return { value: raw };
     }
     case "rule": {
-      if (typeof raw !== "string" || !ruleExists(raw))) {
+      if (typeof raw !== "string" || !(await ruleExists(raw))) {
         return { error: "Unknown rule_ref: " + raw + ". See GET /api/library/rules for valid ones." };
       }
       return { value: raw };
@@ -342,7 +342,7 @@ async function createItem(kind, body, user) {
 
   const values = {};
   for (const [name, spec] of Object.entries(def.fields)) {
-    const result = readField(name, spec, body ? body[name] : undefined);
+    const result = await readField(name, spec, body ? body[name] : undefined);
     if (result.error) return { status: 400, data: { error: result.error } };
     values[name] = result.value;
   }
