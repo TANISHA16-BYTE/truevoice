@@ -19,5 +19,8 @@
     "devvibe"
   ],
   "author": "Tanisha Jain (Backend Lead, Team DevVibe)",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
 }
