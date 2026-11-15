@@ -113,4 +113,11 @@ async function seedPostgresDatabase() {
   console.log("TrueVoice PostgreSQL reference data seeded (existing rows preserved).");
 }
 
+if (require.main === module) {
+  seedPostgresDatabase().catch((error) => {
+    console.error("PostgreSQL seed failed:", error);
+    process.exitCode = 1;
+  });
+}
+
 module.exports = { seedPostgresDatabase };
