@@ -42,7 +42,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#1a070e] px-4 py-10 text-white">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#1a070e] px-4 py-8 text-white sm:py-10">
       {/* Drifting Aurora Lights */}
       <div
         aria-hidden="true"
@@ -58,18 +58,18 @@ export default function LoginPage() {
       />
 
       {/* Frosted Dark Glass Card */}
-      <section className="animate-pop-in relative z-10 w-full max-w-[390px] rounded-2xl border border-white/15 bg-white/[0.06] p-7 shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-       {/* Brand */}
-      <div className="flex items-center gap-2 text-[#e8d4b7]">
-        <Logo />
-      </div>
+      <section className="animate-pop-in relative z-10 w-full max-w-[390px] rounded-2xl border border-white/15 bg-white/[0.06] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:p-7">
+        {/* Brand */}
+        <div className="flex items-center gap-2 text-[#e8d4b7]">
+          <Logo />
+        </div>
 
         {/* Tagline + Heading */}
-        <p className="mt-4 font-serif text-2xl font-bold leading-snug text-white">
+        <p className="mt-4 font-serif text-xl font-bold leading-snug text-white sm:text-2xl">
           Check it before you publish it.
         </p>
 
-        <h1 className="mt-4 font-serif text-xl font-bold text-white">Log in</h1>
+        <h1 className="mt-4 font-serif text-lg font-bold text-white sm:text-xl">Log in</h1>
         <p className="mt-1 text-xs text-white/70">
           Use your work email to check drafts before they go live.
         </p>
@@ -136,7 +136,7 @@ export default function LoginPage() {
         {/* Demo Accounts */}
         <div className="mt-5 border-t border-white/10 pt-4">
           <p className="text-[11px] text-white/65">Demo accounts (made-up data)</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
             {demoAccounts.map((account) => {
               const selected = activeDemo === account.label;
               return (
@@ -149,7 +149,7 @@ export default function LoginPage() {
                     setActiveDemo(account.label);
                     setError(null);
                   }}
-                  className={`rounded-md border px-3 py-1 text-xs font-medium transition active:scale-95 ${
+                  className={`rounded-md border px-3 py-1.5 text-center text-xs font-medium transition active:scale-95 ${
                     selected
                       ? "border-[#d9bc98] bg-[#d9bc98]/20 text-[#f3dfc4]"
                       : "border-white/20 bg-white/[0.04] text-white/85 hover:bg-white/10"

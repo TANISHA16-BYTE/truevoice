@@ -89,18 +89,18 @@ export default function GuidelineHealthPage() {
   const maxFlags = Math.max(...rules.map((r) => r.total_flagged), 1);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-6 sm:space-y-8">
       <div className="animate-pop-in flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-semibold">Guideline Health Score</h1>
-          <p className="mt-2 text-[var(--tv-muted)]">
+          <h1 className="text-2xl font-semibold sm:text-4xl">Guideline Health Score</h1>
+          <p className="mt-2 text-sm text-[var(--tv-muted)] sm:text-base">
             Live analytics from review findings and overrides. Unclear rules are flagged so your
             team can fix the root cause.
           </p>
         </div>
 
         {data && (
-          <div className="flex items-center gap-4 rounded-2xl border-2 border-[var(--tv-champagne)] bg-white px-5 py-3 shadow-sm">
+          <div className="flex w-full items-center justify-between gap-4 rounded-2xl border-2 border-[var(--tv-champagne)] bg-white px-5 py-3 shadow-sm sm:w-auto">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
                 Overall Score
@@ -132,15 +132,15 @@ export default function GuidelineHealthPage() {
 
       {data && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <section className="animate-pop-in rounded-2xl border border-[var(--tv-line)] bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">Most-flagged rules</h2>
+          <section className="animate-pop-in rounded-2xl border border-[var(--tv-line)] bg-white p-4 shadow-sm sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Most-flagged rules</h2>
             <ul className="mt-5 space-y-4">
               {rules.map((r) => {
                 const pct = Math.round((r.total_flagged / maxFlags) * 100);
                 return (
                   <li key={r.rule_ref}>
                     <div className="flex flex-wrap justify-between gap-2 text-sm">
-                      <span className="font-semibold text-[var(--tv-ink)]">
+                      <span className="min-w-0 break-words font-semibold text-[var(--tv-ink)]">
                         {r.rule_ref}
                         {r.title ? ` · ${r.title}` : ""}
                       </span>
@@ -162,9 +162,9 @@ export default function GuidelineHealthPage() {
             </ul>
           </section>
 
-          <section className="animate-pop-in rounded-2xl border-2 border-[var(--tv-champagne)] bg-[#fbf7f0] p-6 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xl font-semibold">Needs clearer wording</h2>
+          <section className="animate-pop-in rounded-2xl border-2 border-[var(--tv-champagne)] bg-[#fbf7f0] p-4 shadow-sm sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold sm:text-xl">Needs clearer wording</h2>
               <span className="rounded-full bg-[#f6e7c8] px-3 py-0.5 text-xs font-semibold text-[#7a4b00]">
                 {data.problematic_rules_count ?? alerts.length} unclear
               </span>
@@ -184,7 +184,7 @@ export default function GuidelineHealthPage() {
                       className="rounded-xl border border-[var(--tv-line)] bg-white p-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-semibold">
+                        <span className="min-w-0 break-words font-semibold">
                           {r.rule_ref}
                           {r.title ? `: ${r.title}` : ""}
                         </span>
@@ -194,7 +194,7 @@ export default function GuidelineHealthPage() {
                       </div>
 
                       {r.current_wording && (
-                        <p className="mt-2 text-xs text-[var(--tv-muted)]">
+                        <p className="mt-2 break-words text-xs text-[var(--tv-muted)]">
                           <strong>Current rule:</strong> {r.current_wording}
                         </p>
                       )}
@@ -214,19 +214,19 @@ export default function GuidelineHealthPage() {
                             onChange={(e) => setDraftWording(e.target.value)}
                             className="w-full rounded-lg border border-[var(--tv-brand)] p-2 text-xs"
                           />
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
                               disabled={saving}
                               onClick={() => saveClearerWording(r)}
-                              className="rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60"
+                              className="w-full rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto"
                             >
                               {saving ? "Saving…" : "Save to library"}
                             </button>
                             <button
                               type="button"
                               onClick={() => setEditingRef(null)}
-                              className="rounded-lg border border-[var(--tv-line)] px-3 py-1.5 text-xs"
+                              className="w-full rounded-lg border border-[var(--tv-line)] px-3 py-1.5 text-xs sm:w-auto"
                             >
                               Cancel
                             </button>
@@ -239,7 +239,7 @@ export default function GuidelineHealthPage() {
                             setEditingRef(r.rule_ref);
                             setDraftWording(r.current_wording ?? "");
                           }}
-                          className="mt-3 rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)]"
+                          className="mt-3 w-full rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] sm:w-auto"
                         >
                           Draft clearer wording
                         </button>

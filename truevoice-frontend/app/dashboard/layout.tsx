@@ -57,14 +57,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   if (!session) {
-    return <p className="p-8 text-[var(--tv-muted)]">Loading…</p>;
+    return <p className="p-4 text-[var(--tv-muted)] sm:p-8">Loading…</p>;
   }
 
   return (
     <SessionContext.Provider value={session}>
       <div className="min-h-screen">
         <TopNav onLogout={handleLogout} />
-        <main className="p-6 md:p-10">{children}</main>
+        <main className="overflow-x-hidden px-4 py-5 sm:px-6 sm:py-8 md:p-10">{children}</main>
       </div>
     </SessionContext.Provider>
   );
