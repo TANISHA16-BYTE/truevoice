@@ -26,18 +26,18 @@ function today() {
 }
 
 // "No source, no fact": a cited source must exist in the sources table.
-async async function sourceExists(sourceId) {
+async function sourceExists(sourceId) {
   return Boolean(await db.get("SELECT source_id FROM sources WHERE source_id = ?", [sourceId]));
 }
 
-async async function ruleExists(ruleId) {
+async function ruleExists(ruleId) {
   return Boolean(await db.get("SELECT rule_id FROM rules WHERE rule_id = ?", [ruleId]));
 }
 
 // ---------------------------------------------------------------
 // FACTS (add, edit, archive)
 // ---------------------------------------------------------------
-async async function nextFactId() {
+async function nextFactId() {
   const rows = await db.query("SELECT fact_id FROM facts");
   let max = 0;
   for (const row of rows) {
@@ -47,13 +47,13 @@ async async function nextFactId() {
   return "F-" + String(max + 1).padStart(2, "0");
 }
 
-async async function getSources() {
+async function getSources() {
   const sources = await checkStaleSources();
   return { status: 200, data: { sources } };
 }
 
 // Archived facts are hidden unless you ask for them with ?status=all
-async async function getFacts(query = {}) {
+async function getFacts(query = {}) {
   const facts =
     query.status === "all"
       ? await db.query("SELECT * FROM facts ORDER BY product_code ASC, fact_id ASC")
@@ -61,7 +61,7 @@ async async function getFacts(query = {}) {
   return { status: 200, data: { facts } };
 }
 
-async async function createFact(body, user) {
+async function createFact(body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -91,7 +91,7 @@ async async function createFact(body, user) {
   return { status: 201, data: { fact: await db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-async async function updateFact(factId, body, user) {
+async function updateFact(factId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -134,7 +134,7 @@ async async function updateFact(factId, body, user) {
   return { status: 200, data: { fact: await db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-async async function archiveFact(factId, user) {
+async function archiveFact(factId, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -315,7 +315,7 @@ function readField(name, spec, raw) {
   }
 }
 
-async async function nextId(def) {
+async function nextId(def) {
   const rows = await db.query("SELECT " + def.idColumn + " AS id FROM " + def.table);
   const pattern = new RegExp("^" + def.prefix + "-(\\d+)$");
   let max = 0;
@@ -326,14 +326,14 @@ async async function nextId(def) {
   return def.prefix + "-" + String(max + 1).padStart(2, "0");
 }
 
-async async function listKind(kind, query = {}) {
+async function listKind(kind, query = {}) {
   const def = KINDS[kind];
   const where = query.status === "all" ? "" : " WHERE archived = 0";
   const items = await db.query("SELECT * FROM " + def.table + where + " ORDER BY " + def.orderBy);
   return { status: 200, data: { [def.table]: items } };
 }
 
-async async function createItem(kind, body, user) {
+async function createItem(kind, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -365,7 +365,7 @@ async async function createItem(kind, body, user) {
   return { status: 201, data: { [def.singular]: row } };
 }
 
-async async function updateItem(kind, itemId, body, user) {
+async function updateItem(kind, itemId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -405,7 +405,7 @@ async async function updateItem(kind, itemId, body, user) {
   return { status: 200, data: { [def.singular]: row } };
 }
 
-async async function archiveItem(kind, itemId, user) {
+async function archiveItem(kind, itemId, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -421,33 +421,33 @@ async async function archiveItem(kind, itemId, user) {
   return { status: 200, data: { [def.singular]: row } };
 }
 
-async async function getPrices(query) {
+async function getPrices(query) {
   return listKind("prices", query);
 }
 
-async async function getOffers(query) {
+async function getOffers(query) {
   return listKind("offers", query);
 }
 
-async async function getClaims(query) {
+async function getClaims(query) {
   return listKind("claims", query);
 }
 
-async async function getTerms(query) {
+async function getTerms(query) {
   return listKind("terms", query);
 }
 
-async async function getRules() {
+async function getRules() {
   const rules = await db.query("SELECT * FROM rules ORDER BY rule_id ASC");
   return { status: 200, data: { rules } };
 }
 
-async async function getProtectedNames() {
+async function getProtectedNames() {
   const protectedNames = await db.query("SELECT * FROM protected_names");
   return { status: 200, data: { protected_names: protectedNames } };
 }
 
-async async function getRegionalNotes() {
+async function getRegionalNotes() {
   const regionalNotes = await db.query("SELECT * FROM regional_notes");
   return { status: 200, data: { regional_notes: regionalNotes } };
 }
@@ -455,7 +455,7 @@ async async function getRegionalNotes() {
 // ---------------------------------------------------------------
 // UNIFIED LIBRARY & PATCH (GET /api/library & PATCH /api/library/:id)
 // ---------------------------------------------------------------
-async async function getUnifiedLibrary() {
+async function getUnifiedLibrary() {
   const sources = checkStaleSources().map((s) => ({
     ...s,
     id: s.source_id,
@@ -526,7 +526,7 @@ async async function getUnifiedLibrary() {
   };
 }
 
-async async function patchLibraryItem(rawId, body, user) {
+async function patchLibraryItem(rawId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
