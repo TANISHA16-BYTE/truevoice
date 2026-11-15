@@ -19,7 +19,7 @@ function createApprovalBadge({ draftId, content, approvedBy, reviewerName }) {
   const approvedAt = new Date().toISOString();
   const publicUrl = config.BASE_URL + "/verify/" + badgeCode;
   const id = "badge_" + Date.now();
-  
+
   db.run(
     "INSERT INTO approval_badges (id, draft_id, badge_code, content_hash, approved_by, reviewer_name, approved_at, public_url, is_revoked, snapshot_content, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
     [
@@ -35,7 +35,7 @@ function createApprovalBadge({ draftId, content, approvedBy, reviewerName }) {
       JSON.stringify({ algorithm: "SHA-256", generator: "TrueVoice Trust Engine v1.0" })
     ]
   );
-  
+
   return {
     id,
     badge_code: badgeCode,
@@ -56,7 +56,7 @@ function verifyBadgeAndContent(badgeCode, submittedContent = null) {
       message: "No approval record found for badge code " + badgeCode + "."
     };
   }
-  
+
   if (badge.is_revoked === 1) {
     return {
       found: true,
@@ -66,22 +66,27 @@ function verifyBadgeAndContent(badgeCode, submittedContent = null) {
       reviewer_name: badge.reviewer_name
     };
   }
-  
+
+  const draft = db.get("SELECT title FROM drafts WHERE id = ?", [badge.draft_id]);
+
   const result = {
     found: true,
     badge_code: badge.badge_code,
-    approved_by: badge.approved_by,
+    title: draft ? draft.title : "Approved Draft",
+    approved_by: badge.reviewer_name || badge.approved_by,
+    approved_by_id: badge.approved_by,
     reviewer_name: badge.reviewer_name,
     approved_at: badge.approved_at,
     content_hash: badge.content_hash,
     public_url: badge.public_url,
+    approved_content: badge.snapshot_content,
     original_approved_content: badge.snapshot_content
   };
-  
+
   if (submittedContent !== null && submittedContent !== undefined) {
     const submittedHash = computeContentHash(submittedContent);
     const matches = submittedHash === badge.content_hash;
-    
+
     result.submitted_content_verification = {
       matches,
       submitted_hash: submittedHash,
@@ -89,7 +94,7 @@ function verifyBadgeAndContent(badgeCode, submittedContent = null) {
       warning: matches ? null : "WARNING: Content has been changed since approval! The text does not match the signed record."
     };
   }
-  
+
   return result;
 }
 

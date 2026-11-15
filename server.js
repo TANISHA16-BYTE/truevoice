@@ -22,7 +22,7 @@ function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization"
   });
   res.end(JSON.stringify(data, null, 2));
@@ -32,7 +32,7 @@ function handleCors(req, res) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization"
     });
     res.end();
@@ -107,8 +107,11 @@ const server = http.createServer(async (req, res) => {
           "POST /api/drafts/:id/findings/:fid/accept",
           "POST /api/drafts/:id/findings/:fid/dismiss",
           "POST /api/drafts/:id/handover",
+          "POST /api/drafts/:id/decision",
           "POST /api/drafts/:id/approve",
           "POST /api/drafts/:id/request-changes",
+          "GET  /api/library",
+          "PATCH /api/library/:id",
           "GET  /api/library/sources",
           "GET  /api/library/facts",
           "GET  /api/library/prices",
@@ -121,6 +124,7 @@ const server = http.createServer(async (req, res) => {
           "GET  /api/verify/:badgeCode/qr (QR Code SVG)",
           "POST /api/verify",
           "GET  /api/health-score",
+          "GET  /api/analytics/guideline-health",
           "POST /api/ai-mistakes",
           "GET  /api/ai-mistakes",
           "GET  /api/audit-logs/export?format=csv|json"
@@ -155,7 +159,8 @@ const server = http.createServer(async (req, res) => {
       pathname.startsWith("/api/drafts/") ||
       pathname === "/api/clash/posts" ||
       pathname === "/api/ai-mistakes" ||
-      pathname === "/api/audit-logs/export";
+      pathname === "/api/audit-logs/export" ||
+      (pathname.startsWith("/api/library/") && method === "PATCH");
 
     if (protectedPath && !currentUser) {
       return sendJson(res, 401, { error: "Authentication required." });
@@ -233,6 +238,12 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, resp.status, resp.data);
     }
 
+    const decisionMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/decision$/);
+    if (decisionMatch && method === "POST") {
+      const resp = draftsCtrl.decideDraft(decisionMatch[1], body, currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
+
     const approveMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/approve$/);
     if (approveMatch && method === "POST") {
       const resp = draftsCtrl.approveDraft(approveMatch[1], body, currentUser);
@@ -248,6 +259,16 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------------
     // Knowledge Base Library Routes
     // ----------------------------------------------------
+    if (pathname === "/api/library" && method === "GET") {
+      const resp = libraryCtrl.getUnifiedLibrary();
+      return sendJson(res, resp.status, resp.data);
+    }
+    const patchLibraryMatch = pathname.match(/^\/api\/library\/([^/]+)$/);
+    if (patchLibraryMatch && method === "PATCH") {
+      const resp = libraryCtrl.patchLibraryItem(patchLibraryMatch[1], body, currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
+
     if (pathname === "/api/library/sources" && method === "GET") {
       const resp = libraryCtrl.getSources();
       return sendJson(res, resp.status, resp.data);
@@ -297,7 +318,7 @@ const server = http.createServer(async (req, res) => {
       const resp = libraryCtrl.getRegionalNotes();
       return sendJson(res, resp.status, resp.data);
     }
-        const libraryItemMatch = pathname.match(/^\/api\/library\/(prices|offers|claims|terms)(?:\/([A-Za-z0-9_-]+))?$/);
+    const libraryItemMatch = pathname.match(/^\/api\/library\/(prices|offers|claims|terms)(?:\/([A-Za-z0-9_-]+))?$/);
     if (libraryItemMatch) {
       const kind = libraryItemMatch[1];
       const itemId = libraryItemMatch[2];
@@ -351,7 +372,7 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------------
     // Guideline Health Score
     // ----------------------------------------------------
-    if (pathname === "/api/health-score" && method === "GET") {
+    if ((pathname === "/api/health-score" || pathname === "/api/analytics/guideline-health") && method === "GET") {
       const resp = healthCtrl.getGuidelineHealth();
       return sendJson(res, resp.status, resp.data);
     }

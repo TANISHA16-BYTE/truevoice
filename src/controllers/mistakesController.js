@@ -1,7 +1,8 @@
 // AI Mistakes Controller ("Report AI Mistake" Learning Loop)
 const { reportAiMistake, listAiMistakes } = require("../services/regionalNuanceService");
 
-// NEW: only reviewers and admins (the local reviewers in the plan) can correct the AI.
+// Only reviewers and admins (the local reviewers in the plan) can correct the AI.
+// Add "creator" here if creators should also report AI mistakes from Submit Draft.
 const REVIEWER_ROLES = ["reviewer", "admin"];
 
 function submitAiMistake(body, user) {
@@ -12,7 +13,11 @@ function submitAiMistake(body, user) {
     return { status: 403, data: { error: "Only reviewers and admins can report an AI mistake." } };
   }
 
-  const { phrase, region, incorrect_flag, user_correction } = body || {};
+  const input = body || {};
+  const phrase = input.phrase ?? input.flagged_text;
+  const region = input.region ?? input.team_region;
+  const incorrect_flag = input.incorrect_flag ?? input.reason;
+  const user_correction = input.user_correction ?? input.correction;
   if (
     typeof phrase !== "string" || !phrase.trim() ||
     typeof user_correction !== "string" || !user_correction.trim()
