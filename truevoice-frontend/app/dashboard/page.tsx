@@ -17,6 +17,29 @@ type Draft = {
   handover_to_manager?: number;
 };
 
+type ReviewerNote = {
+  action: string;
+  actor_name: string;
+  details: string;
+};
+
+type HistoryItem = {
+  action?: string;
+  actor_name?: string;
+  actor?: string;
+  details?: string;
+  note?: string;
+  timestamp?: string;
+  created_at?: string;
+};
+
+type DraftMeta = {
+  status?: string;
+  hasBadge: boolean;
+  history: HistoryItem[];
+  reviewerNote: ReviewerNote | null;
+};
+
 type Queue = { drafts: Draft[]; error: string | null } | null;
 
 const roleHelp: Record<string, string> = {
@@ -39,10 +62,53 @@ function statusLabel(status = ""): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Unknown";
 }
 
-function stageIndex(status = ""): number {
+function pickLatestDecision(history: HistoryItem[]): ReviewerNote | null {
+  const decisions = history.filter((h) => {
+    const a = (h.action ?? "").toUpperCase();
+    return a === "CHANGES_REQUESTED" || a === "APPROVED";
+  });
+  if (decisions.length === 0) return null;
+
+  const hasTimestamps = decisions.some((d) => Boolean(d.timestamp || d.created_at));
+  const chosen = hasTimestamps
+    ? [...decisions].sort((a, b) => {
+        const ta = Date.parse(a.timestamp ?? a.created_at ?? "") || 0;
+        const tb = Date.parse(b.timestamp ?? b.created_at ?? "") || 0;
+        return tb - ta;
+      })[0]
+    : decisions[decisions.length - 1];
+
+  return {
+    action: (chosen.action ?? "").toUpperCase(),
+    actor_name: chosen.actor_name ?? chosen.actor ?? "Reviewer",
+    details: (chosen.details ?? chosen.note ?? "").trim(),
+  };
+}
+
+function stageIndex(
+  status = "",
+  hasBadge = false,
+  history: HistoryItem[] = []
+): number {
   const s = status.toLowerCase();
-  if (s.includes("approv")) return 2;
-  if (s.includes("review")) return 1;
+
+  if (s.includes("approv") || hasBadge) return 2;
+
+  const hasApprovedHistory = history.some((h) =>
+    (h.action ?? "").toLowerCase().includes("approv")
+  );
+  if (hasApprovedHistory && !s.includes("chang")) return 2;
+
+  if (
+    s.includes("review") ||
+    s.includes("submit") ||
+    s.includes("pending") ||
+    s.includes("chang") ||
+    history.some((h) => (h.action ?? "").toLowerCase().includes("chang"))
+  ) {
+    return 1;
+  }
+
   return 0;
 }
 
@@ -76,6 +142,7 @@ export default function DashboardPage() {
   const [queue, setQueue] = useState<Queue>(null);
   const [highRiskFirst, setHighRiskFirst] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [metaByDraft, setMetaByDraft] = useState<Record<string, DraftMeta>>({});
   const [ringReady, setRingReady] = useState(false);
 
   // Live animated demo cycle: "scanning" -> "flagged" -> "fixed"
@@ -93,11 +160,37 @@ export default function DashboardPage() {
     api<unknown>("/drafts")
       .then((data) => {
         const list = Array.isArray(data) ? data : (data as { drafts?: unknown } | null)?.drafts;
-        if (!cancelled) {
-          const parsed = Array.isArray(list) ? (list as Draft[]) : [];
-          setQueue({ drafts: parsed, error: null });
-          if (parsed.length > 0) setExpandedId(parsed[0].id);
-        }
+        if (cancelled) return;
+
+        const parsed = Array.isArray(list) ? (list as Draft[]) : [];
+        setQueue({ drafts: parsed, error: null });
+        if (parsed.length > 0) setExpandedId(parsed[0].id);
+
+        // Prefetch approval badge & history for each draft so stage bars & reviewer notes show immediately
+        Promise.allSettled(
+          parsed.map((d) =>
+            api<{
+              draft?: { status?: string };
+              approval_badge?: { badge_code?: string } | null;
+              history?: HistoryItem[];
+            }>(`/drafts/${d.id}`).then((detail) => ({ id: d.id, detail }))
+          )
+        ).then((results) => {
+          if (cancelled) return;
+          const nextMeta: Record<string, DraftMeta> = {};
+          for (const r of results) {
+            if (r.status !== "fulfilled") continue;
+            const { id, detail } = r.value;
+            const history = detail.history ?? [];
+            nextMeta[id] = {
+              status: detail.draft?.status,
+              hasBadge: Boolean(detail.approval_badge?.badge_code),
+              history,
+              reviewerNote: pickLatestDecision(history),
+            };
+          }
+          setMetaByDraft((prev) => ({ ...prev, ...nextMeta }));
+        });
       })
       .catch((err) => {
         if (!cancelled) {
@@ -353,7 +446,9 @@ export default function DashboardPage() {
           </ol>
         </div>
       </div>
-<StaleFactAlerts />
+
+      <StaleFactAlerts />
+
       {/* Main Queue + Live Auto-Scanning Demo */}
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="lg:col-span-2">
@@ -398,7 +493,20 @@ export default function DashboardPage() {
                 const findings = d.total_findings ?? 0;
                 const high = d.high_severity_findings ?? 0;
                 const isOpen = expandedId === d.id;
-                const activeStage = stageIndex(d.status);
+                const meta = metaByDraft[d.id];
+                const effectiveStatus = meta?.status ?? d.status;
+                const reviewerNote = meta?.reviewerNote ?? null;
+                const activeStage = stageIndex(
+                  effectiveStatus,
+                  meta?.hasBadge ?? false,
+                  meta?.history ?? []
+                );
+                const displayStatus =
+                  activeStage === 2
+                    ? "Approved"
+                    : reviewerNote?.action === "CHANGES_REQUESTED"
+                      ? "Changes requested"
+                      : statusLabel(effectiveStatus);
 
                 return (
                   <li
@@ -427,13 +535,29 @@ export default function DashboardPage() {
                         <div>
                           <p className="font-medium">{d.title ?? d.id}</p>
                           <p className="text-sm text-[var(--tv-muted)]">
-                            {d.channel ?? "No channel"} &middot; {statusLabel(d.status)}
+                            {d.channel ?? "No channel"} &middot; {displayStatus}
                             {d.handover_to_manager === 1 && (
                               <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900">
                                 With manager
                               </span>
                             )}
+                            {reviewerNote?.action === "CHANGES_REQUESTED" && (
+                              <span className="ml-1.5 rounded bg-[#f9ddd9] px-1.5 py-0.5 text-xs font-semibold text-[#9b1c13]">
+                                Changes requested
+                              </span>
+                            )}
                           </p>
+                          {!isOpen && reviewerNote?.details && (
+                            <p
+                              className={`mt-1 line-clamp-1 text-xs ${
+                                reviewerNote.action === "CHANGES_REQUESTED"
+                                  ? "text-[#9b1c13]"
+                                  : "text-[#1f6b3a]"
+                              }`}
+                            >
+                              <strong>{reviewerNote.actor_name}:</strong> {reviewerNote.details}
+                            </p>
+                          )}
                         </div>
                       </button>
 
@@ -508,6 +632,25 @@ export default function DashboardPage() {
                               style={{ width: `${((activeStage + 1) / 3) * 100}%` }}
                             />
                           </div>
+
+                          {/* Latest Reviewer Note */}
+                          {reviewerNote && (reviewerNote.details || reviewerNote.action === "CHANGES_REQUESTED") && (
+                            <p
+                              className={`mt-2.5 rounded-lg px-3 py-2 text-xs ${
+                                reviewerNote.action === "CHANGES_REQUESTED"
+                                  ? "bg-[#f9ddd9] text-[#9b1c13]"
+                                  : "bg-[#ddebdd] text-[#1f6b3a]"
+                              }`}
+                            >
+                              <strong>
+                                {reviewerNote.action === "CHANGES_REQUESTED"
+                                  ? "Changes requested"
+                                  : "Reviewer note"}{" "}
+                                ({reviewerNote.actor_name}):
+                              </strong>{" "}
+                              {reviewerNote.details || "Please review and update this draft."}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>

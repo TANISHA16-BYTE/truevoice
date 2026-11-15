@@ -1,49 +1,91 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
-export type ApprovedFactAlert = {
+type LibraryItem = {
   id: string;
-  fact: string;
-  owner: string;
-  lastChecked: string; // YYYY-MM-DD
+  title?: string;
+  name?: string;
+  text?: string;
+  fact?: string;
+  owner?: string;
+  last_checked_at?: string;
+  is_stale?: boolean;
 };
 
-const INITIAL_FACTS: ApprovedFactAlert[] = [
-  {
-    id: "fact-offer-sheet",
-    fact: "Offer Sheet: Flat 20% off serum (valid 20–30 Nov 2026)",
-    owner: "Tanisha",
-    lastChecked: "2026-11-01",
-  },
-  {
-    id: "fact-delivery",
-    fact: "Free shipping threshold: orders above ₹999",
-    owner: "Riddhi",
-    lastChecked: "2026-06-18",
-  },
-  {
-    id: "fact-clinical",
-    fact: "Hyaluronic acid hydration claim (Study #GL-14)",
-    owner: "Nupur",
-    lastChecked: "2026-07-05",
-  },
-];
+type LibraryResponse = {
+  sources?: LibraryItem[];
+  facts?: LibraryItem[];
+  items?: LibraryItem[];
+};
 
-function daysSince(dateStr: string): number {
+function daysSince(dateStr?: string): number {
+  if (!dateStr) return 0;
   const diff = Date.now() - new Date(dateStr).getTime();
-  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  return Number.isNaN(diff) ? 0 : Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
 }
 
 export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
-  const [facts, setFacts] = useState<ApprovedFactAlert[]>(INITIAL_FACTS);
+  const [items, setItems] = useState<LibraryItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const stale = facts.filter((f) => daysSince(f.lastChecked) > maxAgeDays);
+  useEffect(() => {
+    let cancelled = false;
+    api<LibraryResponse>("/library")
+      .then((res) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const combined: LibraryItem[] = [];
+        for (const entry of [
+          ...(res.sources ?? []),
+          ...(res.facts ?? []),
+          ...(res.items ?? []),
+        ]) {
+          if (entry?.id && !seen.has(entry.id)) {
+            seen.add(entry.id);
+            combined.push(entry);
+          }
+        }
+        setItems(combined);
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  function markRechecked(id: string) {
+  const stale = items.filter(
+    (item) => item.is_stale === true || daysSince(item.last_checked_at) > maxAgeDays
+  );
+
+  async function markRechecked(id: string) {
     const today = new Date().toISOString().slice(0, 10);
-    setFacts((prev) => prev.map((f) => (f.id === id ? { ...f, lastChecked: today } : f)));
+    setSavingId(id);
+    setError(null);
+    try {
+      await api(`/library/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: { last_checked_at: today },
+      });
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, last_checked_at: today, is_stale: false } : item
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update last checked date.");
+    } finally {
+      setSavingId(null);
+    }
   }
+
+  if (!loaded) return null;
 
   return (
     <section className="animate-pop-in rounded-2xl border border-amber-300 bg-amber-50/70 p-5 shadow-sm">
@@ -64,9 +106,15 @@ export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
         </span>
       </div>
 
+      {error && (
+        <p role="alert" className="mt-2 text-xs font-medium text-[#9b1c13]">
+          {error}
+        </p>
+      )}
+
       {stale.length === 0 ? (
         <p className="mt-3 text-xs font-medium text-[#1f6b3a]">
-          &#10003; All approved facts were verified within the last {maxAgeDays} days.
+          &#10003; All approved sources and facts are up to date.
         </p>
       ) : (
         <ul className="mt-3 space-y-2.5">
@@ -76,20 +124,29 @@ export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
               className="animate-pop-in flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3 text-xs"
             >
               <div>
-                <p className="font-semibold text-[var(--tv-ink)]">{item.fact}</p>
+                <p className="font-semibold text-[var(--tv-ink)]">
+                  {item.title ?? item.name ?? item.fact ?? item.text ?? item.id}
+                </p>
                 <p className="mt-0.5 text-[var(--tv-muted)]">
-                  Owner: <strong>{item.owner}</strong> &middot; Last checked:{" "}
-                  <span className="font-semibold text-[#9b1c13]">
-                    {item.lastChecked} ({daysSince(item.lastChecked)} days ago)
-                  </span>
+                  Owner: <strong>{item.owner ?? "Unassigned"}</strong>
+                  {item.last_checked_at && (
+                    <>
+                      {" "}
+                      &middot; Last checked:{" "}
+                      <span className="font-semibold text-[#9b1c13]">
+                        {item.last_checked_at} ({daysSince(item.last_checked_at)} days ago)
+                      </span>
+                    </>
+                  )}
                 </p>
               </div>
               <button
                 type="button"
+                disabled={savingId === item.id}
                 onClick={() => markRechecked(item.id)}
-                className="rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95"
+                className="rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] disabled:opacity-60"
               >
-                Mark re-checked today
+                {savingId === item.id ? "Updating…" : "Mark re-checked today"}
               </button>
             </li>
           ))}

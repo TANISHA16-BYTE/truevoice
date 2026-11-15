@@ -65,12 +65,16 @@ async function createDraft(body, user) {
   const {
     title = "Untitled Draft",
     content,
+    text,
     channel = "General",
     scheduled_for = null,
     product_code = null
   } = body || {};
 
-  if (!content || typeof content !== "string" || !content.trim()) {
+  const draftContent =
+    typeof content === "string" && content.trim() ? content : text;
+
+  if (!draftContent || typeof draftContent !== "string" || !draftContent.trim()) {
     return failure(400, "Draft content is required.");
   }
 
@@ -80,7 +84,7 @@ async function createDraft(body, user) {
   const now = new Date().toISOString();
 
   const checkResult = await runCheckPipeline({
-    text: content,
+    text: draftContent,
     title,
     channel,
     scheduled_for,
@@ -90,7 +94,7 @@ async function createDraft(body, user) {
 
   db.run(
     "INSERT INTO drafts (id, title, content, original_content, channel, scheduled_for, product_code, creator_id, status, risk_level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?)",
-    [draftId, title, content, content, channel, scheduled_for, product_code, creatorId, checkResult.risk_level, now, now]
+    [draftId, title, draftContent, draftContent, channel, scheduled_for, product_code, creatorId, checkResult.risk_level, now, now]
   );
 
   for (const f of checkResult.findings) {
@@ -109,8 +113,10 @@ async function createDraft(body, user) {
   return {
     status: 201,
     data: {
+      id: draftId,
       draft_id: draftId,
       title,
+      status: "submitted",
       risk_level: checkResult.risk_level,
       findings_count: checkResult.findings.length,
       findings: checkResult.findings,
@@ -253,20 +259,62 @@ function handoverToManager(draftId, body, user) {
   const access = findAuthorizedDraft(draftId, user, ["creator"]);
   if (access.error) return access.error;
 
-  const { reason = "Creator requested human review" } = body || {};
+  const { finding_id, explanation, reason } = body || {};
+
+  // Support saving one-chance context explanation + escalating in a single call
+  if (finding_id && typeof explanation === "string" && explanation.trim()) {
+    const finding = db.get(
+      "SELECT * FROM findings WHERE id = ? AND draft_id = ?",
+      [finding_id, draftId]
+    );
+    if (!finding) return failure(404, "Finding not found for this draft.");
+    if (finding.status === "accepted" || finding.status === "dismissed") {
+      return failure(409, "This finding is already " + finding.status + ".");
+    }
+    if (finding.status === "explained" || finding.creator_explanation) {
+      return {
+        status: 409,
+        data: {
+          error: "You have already used your one chance to explain this finding. Hand it over to a human manager.",
+          chances_left: 0,
+          next_step: "handover"
+        }
+      };
+    }
+
+    const cleanExplanation = explanation.trim().slice(0, 500);
+    db.run(
+      "UPDATE findings SET creator_explanation = ?, status = 'explained' WHERE id = ?",
+      [cleanExplanation, finding_id]
+    );
+    logHistory(
+      draftId, user.id, user.name, "EXPLAINED_FINDING",
+      "Creator explained finding " + finding_id + ": " + cleanExplanation
+    );
+  }
+
+  const handoverReason =
+    (typeof reason === "string" && reason.trim()) ||
+    (typeof explanation === "string" && explanation.trim()) ||
+    "Creator requested human review";
+
   db.run(
     "UPDATE drafts SET handover_to_manager = 1, manager_handover_reason = ?, status = 'in_review', updated_at = ? WHERE id = ?",
-    [reason, new Date().toISOString(), draftId]
+    [handoverReason, new Date().toISOString(), draftId]
   );
 
   logHistory(
     draftId, user.id, user.name, "HANDOVER_TO_MANAGER",
-    "Escalated to human reviewer: " + reason
+    "Escalated to human reviewer: " + handoverReason
   );
 
   return {
     status: 200,
-    data: { success: true, message: "Draft handed over to human manager for final decision." }
+    data: {
+      success: true,
+      handover_to_manager: 1,
+      message: "Draft handed over to human manager for final decision."
+    }
   };
 }
 
@@ -345,7 +393,27 @@ function approveDraft(draftId, body, user) {
   if (access.error) return access.error;
 
   const draft = access.draft;
+
+  // Prevent generating multiple approval badges for the same draft.
+  const existingBadge = db.get(
+    "SELECT * FROM approval_badges WHERE draft_id = ? LIMIT 1",
+    [draftId]
+  );
+
+  if (existingBadge) {
+    return {
+      status: 409,
+      data: {
+        success: false,
+        status: "already_approved",
+        message: "This draft already has an approval badge. A second badge cannot be generated.",
+        badge: existingBadge
+      }
+    };
+  }
+
   const now = new Date().toISOString();
+  const note = typeof body?.note === "string" ? body.note.trim() : "";
 
   const badge = createApprovalBadge({
     draftId,
@@ -360,13 +428,23 @@ function approveDraft(draftId, body, user) {
   );
 
   logHistory(
-    draftId, user.id, user.name, "APPROVED",
-    "Draft approved. Generated verification badge: " + badge.badge_code
+    draftId,
+    user.id,
+    user.name,
+    "APPROVED",
+    "Draft approved. Generated verification badge: " +
+      badge.badge_code +
+      (note ? " | Note: " + note : "")
   );
 
   return {
     status: 200,
-    data: { success: true, message: "Draft officially approved.", badge }
+    data: {
+      success: true,
+      status: "approved",
+      message: "Draft officially approved.",
+      badge
+    }
   };
 }
 
@@ -374,7 +452,10 @@ function requestChanges(draftId, body, user) {
   const access = findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
   if (access.error) return access.error;
 
-  const { notes = "Please address flagged findings" } = body || {};
+  const notes =
+    (typeof body?.notes === "string" && body.notes.trim()) ||
+    (typeof body?.note === "string" && body.note.trim()) ||
+    "Please address flagged findings";
   const now = new Date().toISOString();
 
   db.run(
@@ -385,8 +466,31 @@ function requestChanges(draftId, body, user) {
 
   return {
     status: 200,
-    data: { success: true, message: "Changes requested from creator.", notes }
+    data: {
+      success: true,
+      status: "changes_requested",
+      message: "Changes requested from creator.",
+      notes
+    }
   };
+}
+
+function decideDraft(draftId, body, user) {
+  const action = String(body?.action || "").trim().toLowerCase();
+  const note = typeof body?.note === "string" ? body.note.trim() : "";
+
+  if (action === "approve" || action === "approved") {
+    return approveDraft(draftId, { note }, user);
+  }
+  if (
+    action === "request_changes" ||
+    action === "changes_requested" ||
+    action === "request changes"
+  ) {
+    return requestChanges(draftId, { notes: note || "Please address flagged findings" }, user);
+  }
+
+  return failure(400, "Invalid action. Use 'approved' or 'changes_requested'.");
 }
 
 module.exports = {
@@ -398,5 +502,6 @@ module.exports = {
   dismissFinding,
   acceptFindingFix,
   approveDraft,
-  requestChanges
+  requestChanges,
+  decideDraft
 };
