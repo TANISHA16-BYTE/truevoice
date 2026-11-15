@@ -50,7 +50,7 @@ async function findAuthorizedDraft(draftId, user, allowedRoles) {
   return { draft };
 }
 
-async function await logHistory(draftId, actorId, actorName, action, details) {
+async function logHistory(draftId, actorId, actorName, action, details) {
   const id = "hist_" + crypto.randomBytes(4).toString("hex");
   await db.run(
     "INSERT INTO draft_history (id, draft_id, actor_id, actor_name, action, details, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
