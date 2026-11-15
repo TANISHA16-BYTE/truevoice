@@ -23,7 +23,7 @@ async function checkRegionalNuances(text) {
         continue;
       }
 
-      if (rn.allowed === 1) {
+      if (rn.allowed === true || rn.allowed === 1) {
         continue;
       }
 
