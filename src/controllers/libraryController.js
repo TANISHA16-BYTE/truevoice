@@ -178,8 +178,6 @@ const KINDS = {
       }
       return null;
     },
-    // When the current price changes, the previous one becomes the "old price"
-    // (so the outdated-price check keeps working), unless you send old_price_inr yourself.
     onUpdate(existing, body, values) {
       if (body.current_price_inr !== undefined && values.current_price_inr !== existing.current_price_inr) {
         if (body.old_price_inr === undefined) values.old_price_inr = existing.current_price_inr;
@@ -258,7 +256,6 @@ const KINDS = {
   }
 };
 
-// Reads one field from the request, checks it, and returns { value } or { error }.
 function readField(name, spec, raw) {
   if (typeof raw === "string") raw = raw.trim();
 
@@ -408,7 +405,6 @@ function updateItem(kind, itemId, body, user) {
   return { status: 200, data: { [def.singular]: row } };
 }
 
-// Archive = hide, not delete, so the history stays.
 function archiveItem(kind, itemId, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
@@ -456,7 +452,164 @@ function getRegionalNotes() {
   return { status: 200, data: { regional_notes: regionalNotes } };
 }
 
+// ---------------------------------------------------------------
+// UNIFIED LIBRARY & PATCH (GET /api/library & PATCH /api/library/:id)
+// ---------------------------------------------------------------
+function getUnifiedLibrary() {
+  const sources = checkStaleSources().map((s) => ({
+    ...s,
+    id: s.source_id,
+    kind: "source",
+    last_checked_at: s.last_verified_date
+  }));
+
+  const facts = db.query("SELECT * FROM facts WHERE status = 'active' ORDER BY product_code ASC, fact_id ASC").map((f) => ({
+    ...f,
+    id: f.fact_id,
+    kind: "fact",
+    last_checked_at: f.verified_date
+  }));
+
+  const rules = db.query("SELECT * FROM rules ORDER BY rule_id ASC").map((r) => {
+    const src = r.source_id
+      ? db.get("SELECT owner, last_verified_date FROM sources WHERE source_id = ?", [r.source_id])
+      : null;
+    return {
+      ...r,
+      id: r.rule_id,
+      kind: "rule",
+      owner: src ? src.owner : "Brand Team",
+      last_checked_at: src ? src.last_verified_date : null
+    };
+  });
+
+  const prices = db.query("SELECT * FROM prices WHERE archived = 0 ORDER BY current_price_inr DESC").map((p) => ({
+    ...p,
+    id: p.price_id,
+    kind: "price",
+    last_checked_at: p.last_checked || p.effective_date
+  }));
+
+  const offers = db.query("SELECT * FROM offers WHERE archived = 0 ORDER BY status ASC, offer_id ASC").map((o) => ({
+    ...o,
+    id: o.offer_id,
+    kind: "offer",
+    last_checked_at: o.last_checked || o.valid_from
+  }));
+
+  const claims = db.query("SELECT * FROM claims WHERE archived = 0 ORDER BY status ASC, claim_id ASC").map((c) => ({
+    ...c,
+    id: c.claim_id,
+    kind: "claim",
+    last_checked_at: c.last_checked || null
+  }));
+
+  const terms = db.query("SELECT * FROM terms WHERE archived = 0 ORDER BY category ASC, term_id ASC").map((t) => ({
+    ...t,
+    id: t.term_id,
+    kind: "term",
+    last_checked_at: t.last_checked || null
+  }));
+
+  return {
+    status: 200,
+    data: {
+      sources,
+      facts,
+      rules,
+      prices,
+      offers,
+      claims,
+      terms,
+      items: [...sources, ...facts, ...rules, ...prices, ...offers, ...claims, ...terms]
+    }
+  };
+}
+
+function patchLibraryItem(rawId, body, user) {
+  const denied = requireEditor(user);
+  if (denied) return denied;
+
+  const id = decodeURIComponent(String(rawId || "")).trim();
+  if (!id) {
+    return { status: 400, data: { error: "Library item id is required." } };
+  }
+
+  const input = body || {};
+  const hasDate = input.last_checked_at !== undefined;
+  if (hasDate && (typeof input.last_checked_at !== "string" || !DATE_RE.test(input.last_checked_at))) {
+    return { status: 400, data: { error: "last_checked_at must be a date like 2026-11-14." } };
+  }
+  const checkedDate = hasDate ? input.last_checked_at : today();
+
+  // 1. Source (e.g. S-06)
+  const source = db.get("SELECT * FROM sources WHERE source_id = ?", [id]);
+  if (source) {
+    const nextOwner = cleanText(input.owner, 80) || source.owner;
+    db.run(
+      "UPDATE sources SET last_verified_date = ?, status = 'current', owner = ? WHERE source_id = ?",
+      [checkedDate, nextOwner, id]
+    );
+    const updated = db.get("SELECT * FROM sources WHERE source_id = ?", [id]);
+    return {
+      status: 200,
+      data: { item: { ...updated, id: updated.source_id, last_checked_at: updated.last_verified_date } }
+    };
+  }
+
+  // 2. Fact (e.g. F-01)
+  const fact = db.get("SELECT * FROM facts WHERE fact_id = ?", [id]);
+  if (fact) {
+    const nextValue = cleanText(input.fact_value, 300) || fact.fact_value;
+    const nextOwner = cleanText(input.owner, 80) || fact.owner;
+    db.run(
+      "UPDATE facts SET verified_date = ?, fact_value = ?, owner = ? WHERE fact_id = ?",
+      [checkedDate, nextValue, nextOwner, id]
+    );
+    const updated = db.get("SELECT * FROM facts WHERE fact_id = ?", [id]);
+    return {
+      status: 200,
+      data: { item: { ...updated, id: updated.fact_id, last_checked_at: updated.verified_date } }
+    };
+  }
+
+  // 3. Rule (e.g. "Tone 1.3") -> used by Guideline Health Score "Save clearer wording"
+  const rule = db.get("SELECT * FROM rules WHERE rule_id = ?", [id]);
+  if (rule) {
+    const nextText = cleanText(input.text ?? input.wording ?? input.currentWording, 1000) || rule.text;
+    const nextTitle = cleanText(input.title, 120) || rule.title;
+    db.run("UPDATE rules SET text = ?, title = ? WHERE rule_id = ?", [nextText, nextTitle, id]);
+    const updated = db.get("SELECT * FROM rules WHERE rule_id = ?", [id]);
+    return {
+      status: 200,
+      data: { item: { ...updated, id: updated.rule_id } }
+    };
+  }
+
+  // 4. Prices / Offers / Claims / Terms
+  for (const kind of Object.keys(KINDS)) {
+    const def = KINDS[kind];
+    const row = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
+    if (row) {
+      const nextOwner = cleanText(input.owner, 80) || row.owner;
+      db.run(
+        "UPDATE " + def.table + " SET last_checked = ?, owner = ? WHERE " + def.idColumn + " = ?",
+        [checkedDate, nextOwner || null, id]
+      );
+      const updated = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
+      return {
+        status: 200,
+        data: { item: { ...updated, id: updated[def.idColumn], last_checked_at: updated.last_checked } }
+      };
+    }
+  }
+
+  return { status: 404, data: { error: "Library item " + id + " not found." } };
+}
+
 module.exports = {
+  getUnifiedLibrary,
+  patchLibraryItem,
   getSources,
   getFacts,
   createFact,

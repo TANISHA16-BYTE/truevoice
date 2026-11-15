@@ -4,7 +4,7 @@ const db = require("../db/database");
 function calculateGuidelineHealth() {
   // 1. Get all findings grouped by rule_ref
   const findings = db.query("SELECT rule_ref, status, COUNT(*) as count FROM findings WHERE rule_ref IS NOT NULL GROUP BY rule_ref, status");
-  
+
   const ruleStats = {};
   for (const f of findings) {
     if (!ruleStats[f.rule_ref]) {
@@ -46,7 +46,7 @@ function calculateGuidelineHealth() {
   for (const [ruleId, stats] of Object.entries(ruleStats)) {
     const overrideRate = stats.total_flagged > 0 ? (stats.dismissed_or_overridden / stats.total_flagged) : 0;
     const isUnclearOrContested = overrideRate >= 0.40 && stats.total_flagged >= 5;
-    
+
     if (isUnclearOrContested) {
       problematicRulesCount++;
     }
@@ -58,12 +58,13 @@ function calculateGuidelineHealth() {
       suggestion = "Moderate friction observed. Consider updating safe alternatives in guideline.";
     }
 
-    const ruleDetails = db.get("SELECT title, section FROM rules WHERE rule_id = ?", [ruleId]);
+    const ruleDetails = db.get("SELECT title, section, text FROM rules WHERE rule_id = ?", [ruleId]);
 
     analysis.push({
       rule_ref: ruleId,
       title: ruleDetails ? ruleDetails.title : "Guideline Rule",
       section: ruleDetails ? ruleDetails.section : "Compliance",
+      current_wording: ruleDetails ? ruleDetails.text : null,
       total_flagged: stats.total_flagged,
       override_count: stats.dismissed_or_overridden,
       accepted_count: stats.accepted,
