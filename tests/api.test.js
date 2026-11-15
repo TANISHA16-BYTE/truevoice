@@ -1,4 +1,4 @@
-// In-Memory API Integration Test Suite for TrueVoice (18 Comprehensive Tests)
+// In-Memory API Integration Test Suite for TrueVoice (31 Integration Tests)
 const { server } = require("../server");
 const { seedDatabase } = require("../src/db/seed");
 const config = require("../src/config");
@@ -74,7 +74,7 @@ function invokeRoute(method, urlStr, headers = {}, body = null) {
 async function runApiTests() {
   seedDatabase();
   console.log("\n=======================================================");
-  console.log("   TRUEVOICE FULL 18-FEATURE INTEGRATION TEST SUITE");
+  console.log("   TRUEVOICE FULL 31-TEST INTEGRATION SUITE");
   console.log("=======================================================\n");
 
   try {
@@ -206,6 +206,30 @@ async function runApiTests() {
     console.log("  -> Passed. Draft officially approved! Badge: " + badge.badge_code);
     console.log("     Content SHA-256 Hash: " + badge.content_hash);
 
+    console.log("\n[TEST 32] Duplicate approval must preserve the original badge");
+    const duplicateApproval = await invokeRoute(
+      "POST",
+      "/api/drafts/" + draftId + "/approve",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + reviewerToken
+      },
+      {}
+    );
+
+    if (
+      duplicateApproval.status !== 409 ||
+      duplicateApproval.data.status !== "already_approved" ||
+      !duplicateApproval.data.badge ||
+      duplicateApproval.data.badge.badge_code !== badge.badge_code
+    ) {
+      throw new Error("Duplicate approval was not safely rejected or original badge was not preserved");
+    }
+    console.log(
+      "  -> Passed. Second approval rejected; original badge preserved: " +
+      badge.badge_code
+    );
+
     console.log("\n[TEST 15] GET & POST /api/verify (Public Badge & Tamper Detection)");
     const verifyBadgeRes = await invokeRoute("GET", "/api/verify/" + badge.badge_code);
     if (verifyBadgeRes.status !== 200 || !verifyBadgeRes.data.found) throw new Error("Badge lookup failed");
@@ -236,8 +260,30 @@ async function runApiTests() {
 
     console.log("\n[TEST 17] GET /api/health-score (Guideline Health Calculation)");
     const healthRes = await invokeRoute("GET", "/api/health-score");
-    if (healthRes.status !== 200 || !healthRes.data.health_score) throw new Error("Health score failed");
-    console.log("  -> Passed. Guideline Health Score: " + healthRes.data.health_score + "/100. Status: " + healthRes.data.status);
+    if (
+      healthRes.status !== 200 ||
+      typeof healthRes.data.health_score !== "number" ||
+      typeof healthRes.data.has_sufficient_data !== "boolean"
+    ) {
+      throw new Error("Health score response or data-sufficiency indicator failed");
+    }
+    if (
+      healthRes.data.total_findings < 5 &&
+      healthRes.data.status !== "INSUFFICIENT_DATA"
+    ) {
+      throw new Error("Health score incorrectly reports a health status without enough review data");
+    }
+    if (
+      healthRes.data.total_findings >= 5 &&
+      healthRes.data.status === "INSUFFICIENT_DATA"
+    ) {
+      throw new Error("Health score incorrectly reports insufficient data");
+    }
+    console.log(
+      "  -> Passed. Score: " + healthRes.data.health_score +
+      "/100. Status: " + healthRes.data.status +
+      ". Sufficient data: " + healthRes.data.has_sufficient_data
+    );
 
     console.log("\n[TEST 18] GET /api/audit-logs/export?format=csv (Regulatory Audit Export)");
     const auditRes = await invokeRoute("GET", "/api/audit-logs/export?format=csv");
@@ -356,8 +402,203 @@ async function runApiTests() {
       throw new Error("Batch date/price clash detection failed");
     }
     console.log("  -> Passed. Batch date clash and batch price clash detected.");
+
+    console.log("\n[TEST 24] PR #11 Library PATCH requires authentication");
+    const unauthLibraryPatch = await invokeRoute(
+      "PATCH",
+      "/api/library/S-06",
+      { "content-type": "application/json" },
+      { last_checked_at: "2026-11-15" }
+    );
+    if (unauthLibraryPatch.status !== 401) {
+      throw new Error("Unauthenticated library PATCH was not rejected");
+    }
+    console.log("  -> Passed. Unauthenticated library update rejected.");
+
+    console.log("\n[TEST 25] PR #11 Creator cannot edit approved library");
+    const creatorLibraryPatch = await invokeRoute(
+      "PATCH",
+      "/api/library/S-06",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + creatorToken
+      },
+      { last_checked_at: "2026-11-15" }
+    );
+    if (creatorLibraryPatch.status !== 403) {
+      throw new Error("Creator was incorrectly allowed to edit the library");
+    }
+    console.log("  -> Passed. Creator receives 403 for library edits.");
+
+    console.log("\n[TEST 26] PR #11 Reviewer can update source freshness");
+    const reviewerLibraryPatch = await invokeRoute(
+      "PATCH",
+      "/api/library/S-06",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + reviewerToken
+      },
+      {
+        last_checked_at: "2026-11-15",
+        owner: "TrueVoice Verification Test"
+      }
+    );
+    if (
+      reviewerLibraryPatch.status !== 200 ||
+      !reviewerLibraryPatch.data.item ||
+      reviewerLibraryPatch.data.item.last_checked_at !== "2026-11-15"
+    ) {
+      throw new Error("Reviewer source freshness update failed");
+    }
+    console.log("  -> Passed. Reviewer updated source freshness.");
+
+    console.log("\n[TEST 27] PR #11 Unified Library response");
+    const unifiedLibrary = await invokeRoute("GET", "/api/library");
+    const libraryKeys = [
+      "sources", "facts", "rules", "prices", "offers", "claims", "terms", "items"
+    ];
+    if (
+      unifiedLibrary.status !== 200 ||
+      !libraryKeys.every(key => Array.isArray(unifiedLibrary.data[key]))
+    ) {
+      throw new Error("Unified library response is incomplete");
+    }
+    console.log("  -> Passed. All unified library collections returned.");
+
+    console.log("\n[TEST 28] PR #11 Decision endpoint — approve");
+    const decisionApproveDraft = await invokeRoute(
+      "POST",
+      "/api/drafts",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + creatorToken
+      },
+      {
+        title: "Decision API Approval Test",
+        content: "A simple product update for our official campaign.",
+        channel: "Instagram",
+        product_code: "ALL"
+      }
+    );
+    if (decisionApproveDraft.status !== 201 || !decisionApproveDraft.data.draft_id) {
+      throw new Error("Could not create decision approval test draft");
+    }
+
+    const decisionApprove = await invokeRoute(
+      "POST",
+      "/api/drafts/" + decisionApproveDraft.data.draft_id + "/decision",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + reviewerToken
+      },
+      { action: "approve", note: "Integration test approval" }
+    );
+    if (
+      decisionApprove.status !== 200 ||
+      !decisionApprove.data.badge ||
+      !decisionApprove.data.badge.badge_code
+    ) {
+      throw new Error("Decision approve did not generate an approval badge");
+    }
+    console.log("  -> Passed. Decision endpoint approved draft and generated badge.");
+
+    console.log("\n[TEST 29] PR #11 Decision endpoint — request changes");
+    const decisionChangesDraft = await invokeRoute(
+      "POST",
+      "/api/drafts",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + creatorToken
+      },
+      {
+        title: "Decision API Changes Test",
+        content: "A draft waiting for reviewer feedback.",
+        channel: "Email",
+        product_code: "ALL"
+      }
+    );
+    if (decisionChangesDraft.status !== 201 || !decisionChangesDraft.data.draft_id) {
+      throw new Error("Could not create request-changes test draft");
+    }
+
+    const decisionChanges = await invokeRoute(
+      "POST",
+      "/api/drafts/" + decisionChangesDraft.data.draft_id + "/decision",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + reviewerToken
+      },
+      { action: "request_changes", note: "Please clarify the campaign wording." }
+    );
+    if (
+      decisionChanges.status !== 200 ||
+      decisionChanges.data.status !== "changes_requested"
+    ) {
+      throw new Error("Decision request-changes action failed");
+    }
+    console.log("  -> Passed. Decision endpoint recorded request for changes.");
+
+    console.log("\n[TEST 30] PR #11 Guideline Health Analytics endpoint");
+    const guidelineAnalytics = await invokeRoute(
+      "GET",
+      "/api/analytics/guideline-health"
+    );
+    if (
+      guidelineAnalytics.status !== 200 ||
+      typeof guidelineAnalytics.data.health_score !== "number" ||
+      !Array.isArray(guidelineAnalytics.data.most_flagged_rules) ||
+      !Array.isArray(guidelineAnalytics.data.unclear_rules_alert)
+    ) {
+      throw new Error("Guideline Health Analytics response is incomplete");
+    }
+    if (
+      guidelineAnalytics.data.health_score < 0 ||
+      guidelineAnalytics.data.health_score > 100
+    ) {
+      throw new Error("Guideline Health score is outside 0–100");
+    }
+    console.log(
+      "  -> Passed. Real-data health score: " +
+      guidelineAnalytics.data.health_score + "/100."
+    );
+
+    console.log("\n[TEST 31] Report AI Mistake — reviewer permission and persistence");
+    const aiMistakeRes = await invokeRoute(
+      "POST",
+      "/api/ai-mistakes",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + reviewerToken
+      },
+      {
+        phrase: "TrueVoiceIntegrationTestPhrase",
+        region: "India-North",
+        incorrect_flag: "Integration test false positive",
+        user_correction: "This test phrase should not be treated as a violation."
+      }
+    );
+    if (
+      aiMistakeRes.status !== 201 ||
+      !aiMistakeRes.data.success ||
+      !aiMistakeRes.data.mistake ||
+      aiMistakeRes.data.mistake.phrase !== "TrueVoiceIntegrationTestPhrase"
+    ) {
+      throw new Error("Reviewer AI Mistake submission failed");
+    }
+
+    const aiMistakeList = await invokeRoute("GET", "/api/ai-mistakes");
+    if (
+      aiMistakeList.status !== 200 ||
+      !aiMistakeList.data.mistakes.some(
+        item => item.phrase === "TrueVoiceIntegrationTestPhrase"
+      )
+    ) {
+      throw new Error("Saved AI Mistake was not returned by GET endpoint");
+    }
+    console.log("  -> Passed. Reviewer correction was saved and retrieved.");
+
     console.log("\n=======================================================");
-    console.log("   ALL 18 END-TO-END INTEGRATION TESTS PASSED 100%!");
+    console.log("   ALL 32 INTEGRATION TESTS PASSED");
     console.log("=======================================================\n");
 
     process.exit(0);

@@ -1,5 +1,6 @@
 // AI Semantic Checker Service (Gemini API + Offline Heuristic Fallback)
 const config = require("../config");
+const db = require("../db/database");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
@@ -178,13 +179,26 @@ function sanitizeAiFindings(list, text, brandGuide) {
     // "No source, no finding": the cited rule must exist in the brand guide.
     const ruleOk = ruleRef.length > 0 && (!brandGuide || brandGuide.includes(ruleRef));
 
+    const requestedSourceId =
+      typeof f.source_id === "string" && f.source_id.trim()
+        ? f.source_id.trim()
+        : null;
+
+    // Never trust a source ID supplied by the AI unless it exists in our database.
+    const sourceExists = requestedSourceId
+      ? Boolean(db.get(
+          "SELECT source_id FROM sources WHERE source_id = ?",
+          [requestedSourceId]
+        ))
+      : false;
+
     const finding = {
       // Only two AI finding types are allowed, so the screens always know them.
       type: f.type === "unverified_claim" ? "unverified_claim" : "ai_check",
       severity: VALID_SEVERITIES.includes(severity) ? severity : "MEDIUM",
       flagged_text: flagged,
       rule_ref: ruleOk ? ruleRef : null,
-      source_id: typeof f.source_id === "string" && f.source_id ? f.source_id : null,
+      source_id: sourceExists ? requestedSourceId : null,
       reason: f.reason || "Flagged by AI check.",
       suggested_fix: f.suggested_fix || null,
       confidence
@@ -193,6 +207,11 @@ function sanitizeAiFindings(list, text, brandGuide) {
     if (!ruleOk) {
       finding.type = "unverified_claim";
       finding.reason = "Unverified, needs source: " + finding.reason;
+    } else if (requestedSourceId && !sourceExists) {
+      finding.type = "unverified_claim";
+      finding.reason =
+        "Unverified, needs source: the AI referenced a source ID that does not exist. " +
+        finding.reason;
     }
     clean.push(finding);
   }

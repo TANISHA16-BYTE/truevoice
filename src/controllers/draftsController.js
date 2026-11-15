@@ -393,6 +393,25 @@ function approveDraft(draftId, body, user) {
   if (access.error) return access.error;
 
   const draft = access.draft;
+
+  // Prevent generating multiple approval badges for the same draft.
+  const existingBadge = db.get(
+    "SELECT * FROM approval_badges WHERE draft_id = ? LIMIT 1",
+    [draftId]
+  );
+
+  if (existingBadge) {
+    return {
+      status: 409,
+      data: {
+        success: false,
+        status: "already_approved",
+        message: "This draft already has an approval badge. A second badge cannot be generated.",
+        badge: existingBadge
+      }
+    };
+  }
+
   const now = new Date().toISOString();
   const note = typeof body?.note === "string" ? body.note.trim() : "";
 
@@ -409,8 +428,13 @@ function approveDraft(draftId, body, user) {
   );
 
   logHistory(
-    draftId, user.id, user.name, "APPROVED",
-    "Draft approved. Generated verification badge: " + badge.badge_code + (note ? " | Note: " + note : "")
+    draftId,
+    user.id,
+    user.name,
+    "APPROVED",
+    "Draft approved. Generated verification badge: " +
+      badge.badge_code +
+      (note ? " | Note: " + note : "")
   );
 
   return {
