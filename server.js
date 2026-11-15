@@ -424,7 +424,7 @@ function startServer(port = config.PORT) {
 }
 
 if (require.main === module) {
-  seedDatabase();
+  if (!config.DATABASE_URL) seedDatabase();
   startServer();
 }
 
