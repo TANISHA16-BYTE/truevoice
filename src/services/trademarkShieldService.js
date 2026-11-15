@@ -24,9 +24,9 @@ function levenshteinDistance(a, b) {
   return matrix[b.length][a.length];
 }
 
-function checkTrademarks(text) {
+async function checkTrademarks(text) {
   const findings = [];
-  const protectedItems = db.query("SELECT * FROM protected_names");
+  const protectedItems = await db.query("SELECT * FROM protected_names");
   const normalizedText = text.toLowerCase();
   
   // Extract words and 2-word n-grams
