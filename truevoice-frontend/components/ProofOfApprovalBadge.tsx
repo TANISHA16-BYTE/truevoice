@@ -348,19 +348,21 @@ export function ProofOfApprovalBadge({
 
   const qrSize = qrMatrix ? qrMatrix.length + 8 : 37;
 
-  return (
-    <div className="animate-pop-in rounded-2xl border-2 border-[#1f6b3a]/40 bg-white p-6 shadow-md">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+ return (
+    <div className="animate-pop-in rounded-2xl border-2 border-[#1f6b3a]/40 bg-white p-4 shadow-md sm:p-6">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+        <div className="min-w-0 flex-1">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ddebdd] px-3 py-1 text-xs font-bold text-[#1f6b3a]">
             &#10003; PROOF OF APPROVAL
           </span>
-          <h3 className="mt-2 font-serif text-xl font-semibold text-[var(--tv-ink)]">{title}</h3>
+          <h3 className="mt-2 break-words font-serif text-lg font-semibold text-[var(--tv-ink)] sm:text-xl">
+            {title}
+          </h3>
           <p className="mt-1 text-xs text-[var(--tv-muted)]">
             Approved by <strong className="text-[var(--tv-ink)]">{approvedBy}</strong> &middot;{" "}
             {approvedAt}
           </p>
-          <p className="mt-1 font-mono text-[11px] text-[var(--tv-muted)]">
+          <p className="mt-1 break-all font-mono text-[11px] text-[var(--tv-muted)]">
             Fingerprint: {approvedHash}
           </p>
         </div>
@@ -370,7 +372,7 @@ export function ProofOfApprovalBadge({
           href={verifyPath}
           target="_blank"
           title={`Open ${verifyPath}`}
-          className="flex flex-col items-center rounded-xl border border-[var(--tv-line)] bg-white p-2.5 transition hover:border-[var(--tv-brand)] hover:shadow-sm"
+          className="flex w-full shrink-0 flex-col items-center rounded-xl border border-[var(--tv-line)] bg-white p-2.5 transition hover:border-[var(--tv-brand)] hover:shadow-sm sm:w-auto"
         >
           {qrMatrix && (
             <svg
@@ -405,14 +407,18 @@ export function ProofOfApprovalBadge({
       </div>
 
       {/* Short Link */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--tv-paper)] px-3 py-2 text-xs">
-        <Link href={verifyPath} target="_blank" className="truncate font-mono text-[var(--tv-ink)] underline">
+      <div className="mt-4 flex flex-col gap-2 rounded-xl bg-[var(--tv-paper)] px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+        <Link
+          href={verifyPath}
+          target="_blank"
+          className="min-w-0 flex-1 truncate font-mono text-[var(--tv-ink)] underline"
+        >
           {shortUrl}
         </Link>
         <button
           type="button"
           onClick={copyLink}
-          className="rounded-lg bg-[var(--tv-brand)] px-3 py-1 font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95"
+          className="w-full shrink-0 rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95 sm:w-auto sm:py-1"
         >
           {copied ? "Copied!" : "Copy short link"}
         </button>

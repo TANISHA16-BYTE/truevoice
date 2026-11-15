@@ -106,12 +106,12 @@ export default function LibraryPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <h1 className="text-4xl font-semibold">Library</h1>
-      <p className="mt-2 max-w-2xl text-[var(--tv-muted)]">
+      <h1 className="text-2xl font-semibold sm:text-4xl">Library</h1>
+      <p className="mt-2 max-w-2xl text-sm text-[var(--tv-muted)] sm:text-base">
         The approved facts, prices, offers and rules that every draft is checked against.
       </p>
 
-      <div role="group" aria-label="Library sections" className="mt-6 flex flex-wrap gap-2">
+      <div role="group" aria-label="Library sections" className="mt-5 flex flex-wrap gap-2 sm:mt-6">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -121,7 +121,7 @@ export default function LibraryPage() {
               setTab(t.key);
               setQuery("");
             }}
-            className={`rounded-full px-4 py-2 text-sm font-medium ${
+            className={`rounded-full px-3 py-1.5 text-xs font-medium sm:px-4 sm:py-2 sm:text-sm ${
               t.key === tab
                 ? "bg-[var(--tv-brand)] text-white"
                 : "border border-[var(--tv-edge)] hover:bg-white"
@@ -134,7 +134,7 @@ export default function LibraryPage() {
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold">{current.label}</h2>
+          <h2 className="text-xl font-semibold sm:text-2xl">{current.label}</h2>
           <p className="text-sm text-[var(--tv-muted)]">{current.help}</p>
         </div>
         <div className="w-full sm:w-72">
@@ -146,7 +146,7 @@ export default function LibraryPage() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-[var(--tv-edge)] bg-white px-3 py-2"
+            className="mt-1 block w-full rounded-md border border-[var(--tv-edge)] bg-white px-3 py-2 text-sm"
           />
         </div>
       </div>
@@ -177,22 +177,22 @@ export default function LibraryPage() {
                 .filter(([k]) => !keys.includes(k) && k !== "id")
                 .slice(0, 8);
               return (
-                <li key={`${i}-${String(item.id ?? "")}`} className="px-5 py-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <p className="flex-1 font-medium">{text}</p>
+                <li key={`${i}-${String(item.id ?? "")}`} className="px-4 py-4 sm:px-5">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <p className="min-w-0 flex-1 break-words font-medium">{text}</p>
                     {needsRecheck(item) && (
-                      <span className="rounded-full bg-[#f6e7c8] px-3 py-0.5 text-sm font-semibold text-[#7a4b00]">
+                      <span className="rounded-full bg-[#f6e7c8] px-3 py-0.5 text-xs font-semibold text-[#7a4b00] sm:text-sm">
                         Needs re-check
                       </span>
                     )}
                   </div>
-                  <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                  <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
                     {details.map(([k, v]) => (
-                      <div key={k} className="flex gap-2">
-                        <dt className="text-[var(--tv-muted)]">
+                      <div key={k} className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5">
+                        <dt className="shrink-0 text-[var(--tv-muted)]">
                           {k.replace(/_inr$/, "").replace(/_/g, " ")}:
                         </dt>
-                        <dd className="break-words">{formatValue(v, k)}</dd>
+                        <dd className="min-w-0 break-words">{formatValue(v, k)}</dd>
                       </div>
                     ))}
                   </dl>

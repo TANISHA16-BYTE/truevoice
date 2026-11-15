@@ -88,7 +88,7 @@ export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
   if (!loaded) return null;
 
   return (
-    <section className="animate-pop-in rounded-2xl border border-amber-300 bg-amber-50/70 p-5 shadow-sm">
+    <section className="animate-pop-in rounded-2xl border border-amber-300 bg-amber-50/70 p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {stale.length > 0 && (
@@ -121,10 +121,10 @@ export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
           {stale.map((item) => (
             <li
               key={item.id}
-              className="animate-pop-in flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3 text-xs"
+              className="animate-pop-in flex flex-col items-start justify-between gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3 text-xs sm:flex-row sm:items-center"
             >
-              <div>
-                <p className="font-semibold text-[var(--tv-ink)]">
+              <div className="min-w-0">
+                <p className="break-words font-semibold text-[var(--tv-ink)]">
                   {item.title ?? item.name ?? item.fact ?? item.text ?? item.id}
                 </p>
                 <p className="mt-0.5 text-[var(--tv-muted)]">
@@ -144,7 +144,7 @@ export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
                 type="button"
                 disabled={savingId === item.id}
                 onClick={() => markRechecked(item.id)}
-                className="rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] disabled:opacity-60"
+                className="w-full shrink-0 rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto"
               >
                 {savingId === item.id ? "Updating…" : "Mark re-checked today"}
               </button>

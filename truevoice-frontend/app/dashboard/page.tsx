@@ -255,24 +255,24 @@ export default function DashboardPage() {
   const lowDeg = medDeg + (medCount / total) * 360;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="animate-pop-in flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-semibold">Welcome to TrueVoice</h1>
-          <p className="mt-2 text-[var(--tv-muted)]">
+          <h1 className="text-2xl font-semibold sm:text-4xl">Welcome to TrueVoice</h1>
+          <p className="mt-2 text-sm text-[var(--tv-muted)] sm:text-base">
             Signed in as <span className="font-semibold text-[var(--tv-ink)]">{user.name}</span> (
             {user.role}). {roleHelp[user.role] ?? ""}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
           <span className="rounded-full border border-[var(--tv-line)] bg-white px-3 py-1 text-xs text-[var(--tv-muted)] shadow-xs">
             &#10022; Gemini AI assisted &middot; Human decides
           </span>
           <Link
             href="/dashboard/submit"
-            className="group inline-flex items-center gap-2 rounded-xl bg-[var(--tv-brand)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--tv-brand-ink)] hover:shadow-md active:scale-95"
+            className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--tv-brand)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--tv-brand-ink)] hover:shadow-md active:scale-95 sm:w-auto"
           >
             <span>+ Check a new draft</span>
             <span className="transition-transform duration-300 group-hover:translate-x-0.5">&rarr;</span>
@@ -326,9 +326,9 @@ export default function DashboardPage() {
         {/* Card 2: 3-Color Sweeping Donut + Growing Bars */}
         <div
           style={{ animationDelay: "90ms" }}
-          className="animate-pop-in flex items-center justify-between gap-4 rounded-2xl border border-[var(--tv-line)] bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
+          className="animate-pop-in flex flex-col-reverse gap-4 rounded-2xl border border-[var(--tv-line)] bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
         >
-          <div className="flex-1 space-y-2">
+          <div className="w-full flex-1 space-y-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
               Risk breakdown
             </span>
@@ -375,7 +375,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <svg className="h-24 w-24 shrink-0" viewBox="0 0 36 36" aria-hidden="true">
+          <svg className="h-24 w-24 shrink-0 self-center" viewBox="0 0 36 36" aria-hidden="true">
             <circle cx="18" cy="18" r="15.5" fill="none" stroke="#efe8dc" strokeWidth="3.8" />
             <circle
               cx="18"
@@ -426,19 +426,19 @@ export default function DashboardPage() {
           </span>
           <ol className="mt-3 space-y-1.5 text-xs font-medium text-[var(--tv-ink)]">
             <li className="flex items-center gap-2">
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--tv-brand)] text-[10px] text-white">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--tv-brand)] text-[10px] text-white">
                 1
               </span>
               Exact-match rules run first
             </li>
             <li className="flex items-center gap-2">
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--tv-brand)] text-[10px] text-white">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--tv-brand)] text-[10px] text-white">
                 2
               </span>
               AI checks tone &amp; cites approved source
             </li>
             <li className="flex items-center gap-2">
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--tv-ok)] text-[10px] text-white">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--tv-ok)] text-[10px] text-white">
                 3
               </span>
               Human reviewer makes final call
@@ -451,10 +451,10 @@ export default function DashboardPage() {
 
       {/* Main Queue + Live Auto-Scanning Demo */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="lg:col-span-2">
+        <section className="min-w-0 lg:col-span-2">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold">Review queue</h2>
+              <h2 className="text-xl font-semibold sm:text-2xl">Review queue</h2>
               <p className="mt-1 text-sm text-[var(--tv-muted)]">
                 Click any draft row to inspect stage progress.
               </p>
@@ -512,14 +512,14 @@ export default function DashboardPage() {
                   <li
                     key={d.id}
                     style={{ animationDelay: `${idx * 85}ms` }}
-                    className="animate-pop-in px-5 py-4 transition-colors duration-200 hover:bg-[#fcf9f3]"
+                    className="animate-pop-in px-4 py-4 transition-colors duration-200 hover:bg-[#fcf9f3] sm:px-5"
                   >
                     <div className="flex flex-wrap items-center gap-3">
                       <button
                         type="button"
                         aria-expanded={isOpen}
                         onClick={() => setExpandedId(isOpen ? null : d.id)}
-                        className="flex min-w-48 flex-1 items-center gap-3 text-left"
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
                         <svg
                           className={`h-4 w-4 shrink-0 text-[var(--tv-muted)] transition-transform duration-300 ${
@@ -532,8 +532,8 @@ export default function DashboardPage() {
                         >
                           <path d="m6 9 6 6 6-6" />
                         </svg>
-                        <div>
-                          <p className="font-medium">{d.title ?? d.id}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{d.title ?? d.id}</p>
                           <p className="text-sm text-[var(--tv-muted)]">
                             {d.channel ?? "No channel"} &middot; {displayStatus}
                             {d.handover_to_manager === 1 && (
@@ -561,13 +561,13 @@ export default function DashboardPage() {
                         </div>
                       </button>
 
-                      <p className="w-32 text-sm text-[var(--tv-muted)]">
+                      <p className="text-sm text-[var(--tv-muted)] sm:w-32">
                         {findings} {findings === 1 ? "finding" : "findings"}
                         {high > 0 && <>, {high} high</>}
                       </p>
 
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-sm font-semibold ${
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold sm:text-sm ${
                           riskStyle[risk] ?? "bg-[var(--tv-paper)]"
                         }`}
                       >
@@ -598,7 +598,7 @@ export default function DashboardPage() {
                       }`}
                     >
                       <div className="overflow-hidden">
-                        <div className="ml-7 mt-3 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] px-4 py-3 text-xs">
+                        <div className="mt-3 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] px-3 py-3 text-xs sm:ml-7 sm:px-4">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-semibold text-[var(--tv-muted)]">Workflow:</span>
@@ -665,7 +665,7 @@ export default function DashboardPage() {
         <aside
           aria-label="Example finding"
           style={{ animationDelay: "220ms" }}
-          className="animate-pop-in relative self-start overflow-hidden rounded-2xl border-2 border-[var(--tv-champagne)] bg-white p-5 shadow-sm"
+          className="animate-pop-in relative self-start overflow-hidden rounded-2xl border-2 border-[var(--tv-champagne)] bg-white p-4 shadow-sm sm:p-5"
         >
           {/* Sweeping Gold Scanner Beam during scanning phase */}
           {demoPhase === "scanning" && (
@@ -676,7 +676,7 @@ export default function DashboardPage() {
           )}
 
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-xl font-semibold">How a finding looks</h2>
+            <h2 className="text-lg font-semibold sm:text-xl">How a finding looks</h2>
             <button
               type="button"
               onClick={() => {

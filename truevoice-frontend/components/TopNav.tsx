@@ -30,8 +30,11 @@ export default function TopNav({ onLogout }: { onLogout: () => void }) {
 
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-r from-[var(--tv-brand-ink)] via-[var(--tv-brand)] to-[#54162e] text-[var(--tv-paper)] shadow-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-3.5">
-        <Link href="/dashboard" className="flex items-center gap-2.5 text-[var(--tv-champagne)]">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-6 sm:py-3.5">
+        <Link
+          href="/dashboard"
+          className="flex min-w-0 shrink-0 items-center gap-2.5 text-[var(--tv-champagne)]"
+        >
           <Logo />
         </Link>
 
@@ -62,15 +65,15 @@ export default function TopNav({ onLogout }: { onLogout: () => void }) {
           })}
         </nav>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs sm:px-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--tv-champagne)] font-semibold text-[var(--tv-brand-ink)]">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--tv-champagne)] font-semibold text-[var(--tv-brand-ink)]">
               {initial}
             </span>
             <span className="sr-only sm:hidden">
               {displayName}, {displayRole}
             </span>
-            <span className="hidden font-medium sm:inline">
+            <span className="hidden max-w-[180px] truncate font-medium sm:inline">
               {displayName} &middot;{" "}
               <span className="capitalize text-[var(--tv-champagne)]">{displayRole}</span>
             </span>
@@ -78,7 +81,7 @@ export default function TopNav({ onLogout }: { onLogout: () => void }) {
           <button
             type="button"
             onClick={onLogout}
-            className="min-h-10 rounded-lg border border-white/25 px-3 py-1.5 text-xs font-medium transition hover:bg-white/15 active:scale-95"
+            className="min-h-10 shrink-0 whitespace-nowrap rounded-lg border border-white/25 px-3 py-1.5 text-xs font-medium transition hover:bg-white/15 active:scale-95"
           >
             Log out
           </button>
@@ -87,7 +90,7 @@ export default function TopNav({ onLogout }: { onLogout: () => void }) {
 
       {/* Phone and tablet navigation: a row of links that scrolls sideways (below 1024px) */}
       <nav aria-label="Primary" className="border-t border-white/10 lg:hidden">
-        <ul className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2 sm:px-6">
+        <ul className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden">
           {NAV_ITEMS.map((item, idx) => {
             const isActive = idx === activeIdx;
             return (
@@ -95,7 +98,7 @@ export default function TopNav({ onLogout }: { onLogout: () => void }) {
                 <Link
                   href={item.href}
                   aria-current={isActive ? "page" : undefined}
-                  className={`block whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-colors ${
+                  className={`block whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-medium transition-colors sm:px-4 sm:py-2.5 sm:text-sm ${
                     isActive
                       ? "bg-[var(--tv-champagne)] text-[var(--tv-brand-ink)]"
                       : "text-[var(--tv-paper)]/90 hover:bg-white/10"

@@ -349,8 +349,8 @@ export default function SubmitPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="animate-pop-in">
-        <h1 className="text-4xl font-semibold">Submit draft</h1>
-        <p className="mt-2 max-w-2xl text-[var(--tv-muted)]">
+        <h1 className="text-2xl font-semibold sm:text-4xl">Submit draft</h1>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--tv-muted)] sm:text-base">
           Paste a draft to see what needs fixing before a reviewer looks at it. TrueVoice checks it
           against the approved library, shows the source for every finding, and leaves the decision
           to a person.
@@ -447,17 +447,17 @@ export default function SubmitPage() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Paste your post, ad copy, or email draft here..."
-              className="block w-full bg-transparent p-4 text-base outline-none"
+              className="block w-full bg-transparent p-3.5 text-sm outline-none sm:p-4 sm:text-base"
             />
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
           <button
             type="button"
             onClick={handleCheck}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl bg-[var(--tv-brand)] px-6 py-2.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--tv-brand-ink)] active:scale-95 disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--tv-brand)] px-6 py-2.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--tv-brand-ink)] active:scale-95 disabled:opacity-60 sm:w-auto"
           >
             {loading && (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -472,11 +472,11 @@ export default function SubmitPage() {
               setSavedDraftId(null);
               setNotice(null);
             }}
-            className="rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95"
+            className="w-full rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95 sm:w-auto"
           >
             Use example draft
           </button>
-          <label className="cursor-pointer rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95">
+          <label className="w-full cursor-pointer rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-center text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95 sm:w-auto">
             Attach .txt / .md
             <input
               type="file"
@@ -488,7 +488,7 @@ export default function SubmitPage() {
           <button
             type="button"
             onClick={handleClear}
-            className="rounded-xl border border-[var(--tv-edge)] px-4 py-2.5 text-sm font-medium transition hover:bg-white active:scale-95"
+            className="w-full rounded-xl border border-[var(--tv-edge)] px-4 py-2.5 text-sm font-medium transition hover:bg-white active:scale-95 sm:w-auto"
           >
             Clear
           </button>
@@ -524,15 +524,15 @@ export default function SubmitPage() {
           {/* Overall Risk Summary + Submit for Human Review */}
           <div
             role="status"
-            className="animate-pop-in flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-[var(--tv-champagne)] bg-white p-5 shadow-sm"
+            className="animate-pop-in flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-[var(--tv-champagne)] bg-white p-4 shadow-sm sm:p-5"
           >
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
                   Overall risk
                 </p>
                 <span
-                  className={`mt-1 inline-flex items-center gap-2 rounded-full px-4 py-1 text-lg font-semibold ${
+                  className={`mt-1 inline-flex items-center gap-2 rounded-full px-4 py-1 text-base font-semibold sm:text-lg ${
                     severityStyle[risk] ?? "bg-[var(--tv-paper)]"
                   }`}
                 >
@@ -562,7 +562,7 @@ export default function SubmitPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex w-full items-center gap-3 sm:w-auto">
               <span className="hidden text-xs text-[var(--tv-muted)] sm:inline">
                 &#10022; Human decides
               </span>
@@ -570,7 +570,7 @@ export default function SubmitPage() {
                 type="button"
                 disabled={submittingDraft || Boolean(savedDraftId) || outOfDate}
                 onClick={submitDraftToQueue}
-                className="rounded-xl bg-[var(--tv-brand)] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95 disabled:opacity-60"
+                className="w-full rounded-xl bg-[var(--tv-brand)] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95 disabled:opacity-60 sm:w-auto sm:py-2"
               >
                 {savedDraftId
                   ? "✓ Submitted to Queue"
@@ -608,7 +608,7 @@ export default function SubmitPage() {
                   <li
                     key={f.id}
                     style={{ animationDelay: `${idx * 90}ms` }}
-                    className="animate-pop-in rounded-2xl border border-[var(--tv-line)] bg-white p-5 shadow-sm transition hover:shadow-md"
+                    className="animate-pop-in rounded-2xl border border-[var(--tv-line)] bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -717,19 +717,19 @@ export default function SubmitPage() {
                               className="mt-1 w-full rounded-lg border border-[var(--tv-line)] bg-white p-2 text-xs"
                             />
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
                               disabled={mistakeSavingId === f.id}
                               onClick={() => submitAiMistake(f)}
-                              className="rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60"
+                              className="w-full rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto"
                             >
                               {mistakeSavingId === f.id ? "Saving…" : "Save correction"}
                             </button>
                             <button
                               type="button"
                               onClick={() => setOpenReportId(null)}
-                              className="rounded-lg border border-[var(--tv-line)] bg-white px-3 py-1.5"
+                              className="w-full rounded-lg border border-[var(--tv-line)] bg-white px-3 py-1.5 sm:w-auto"
                             >
                               Cancel
                             </button>
@@ -739,7 +739,7 @@ export default function SubmitPage() {
                     </div>
 
                     {f.flagged_text && (
-                      <p className="mt-3 text-sm">
+                      <p className="mt-3 break-words text-sm">
                         Flagged wording:{" "}
                         <mark className="rounded bg-[#f9ddd9] px-1.5 py-0.5 font-medium text-[#9b1c13]">
                           {f.flagged_text}
@@ -749,7 +749,7 @@ export default function SubmitPage() {
 
                     <p className="mt-2 text-sm">{f.reason}</p>
 
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[var(--tv-paper)] px-3.5 py-2.5 text-xs text-[var(--tv-muted)]">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--tv-paper)] px-3.5 py-2.5 text-xs text-[var(--tv-muted)]">
                       <span>
                         {f.rule_ref && <>Rule {f.rule_ref}</>}
                         {f.rule_ref && f.source_id && <> &middot; </>}
@@ -761,7 +761,7 @@ export default function SubmitPage() {
                       </span>
 
                       {confidence !== null && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
                           <span>Confidence {confidence}%</span>
                           <div className="h-1.5 w-20 overflow-hidden rounded-full bg-white">
                             <div
@@ -776,8 +776,8 @@ export default function SubmitPage() {
                     </div>
 
                     {f.suggested_fix && (
-                      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#1f6b3a]/20 bg-[#ddebdd]/40 p-3">
-                        <p className="flex-1 text-sm">
+                      <div className="mt-4 flex flex-col items-stretch gap-3 rounded-xl border border-[#1f6b3a]/20 bg-[#ddebdd]/40 p-3 sm:flex-row sm:items-center">
+                        <p className="min-w-0 flex-1 break-words text-sm">
                           <span className="font-semibold text-[#1f6b3a]">Suggested fix:</span>{" "}
                           {f.suggested_fix}
                         </p>
@@ -789,7 +789,7 @@ export default function SubmitPage() {
                           <button
                             type="button"
                             onClick={() => applyFix(f)}
-                            className="rounded-lg bg-[var(--tv-brand)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95"
+                            className="w-full shrink-0 rounded-lg bg-[var(--tv-brand)] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95 sm:w-auto sm:py-1.5"
                           >
                             Use this fix
                           </button>
@@ -834,7 +834,7 @@ export default function SubmitPage() {
                                 type="button"
                                 disabled={handingId === f.id}
                                 onClick={() => handleHandover(f, idx)}
-                                className="mt-2 rounded-lg bg-[#7a4b00] px-3 py-1.5 font-semibold text-white transition hover:bg-[#5e3a00] active:scale-95 disabled:opacity-60"
+                                className="mt-2 w-full rounded-lg bg-[#7a4b00] px-3 py-1.5 font-semibold text-white transition hover:bg-[#5e3a00] active:scale-95 disabled:opacity-60 sm:w-auto"
                               >
                                 {handingId === f.id ? "Sending to manager…" : "Hand to Manager"}
                               </button>
