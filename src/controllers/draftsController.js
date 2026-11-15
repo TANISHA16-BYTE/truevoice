@@ -415,7 +415,7 @@ function approveDraft(draftId, body, user) {
   const now = new Date().toISOString();
   const note = typeof body?.note === "string" ? body.note.trim() : "";
 
-  const badge = createApprovalBadge({
+  const badge = await createApprovalBadge({
     draftId,
     content: draft.content,
     approvedBy: user.id,
