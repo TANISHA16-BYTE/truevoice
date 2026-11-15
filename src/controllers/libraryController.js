@@ -456,7 +456,7 @@ async function getRegionalNotes() {
 // UNIFIED LIBRARY & PATCH (GET /api/library & PATCH /api/library/:id)
 // ---------------------------------------------------------------
 async function getUnifiedLibrary() {
-  const sources = checkStaleSources().map((s) => ({
+  const sources = (await checkStaleSources()).map((s) => ({
     ...s,
     id: s.source_id,
     kind: "source",
@@ -470,7 +470,7 @@ async function getUnifiedLibrary() {
     last_checked_at: f.verified_date
   }));
 
-  const rules = (await db.query("SELECT * FROM rules ORDER BY rule_id ASC")).map((r) => {
+  const rules = await Promise.all((await db.query("SELECT * FROM rules ORDER BY rule_id ASC")).map(async (r) => {
     const src = r.source_id
       ? await db.get("SELECT owner, last_verified_date FROM sources WHERE source_id = ?", [r.source_id])
       : null;
@@ -481,7 +481,7 @@ async function getUnifiedLibrary() {
       owner: src ? src.owner : "Brand Team",
       last_checked_at: src ? src.last_verified_date : null
     };
-  });
+  }));
 
   const prices = ((await db.query("SELECT * FROM prices WHERE archived = 0 ORDER BY current_price_inr DESC"))).map((p) => ({
     ...p,
