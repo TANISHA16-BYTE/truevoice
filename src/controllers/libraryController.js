@@ -26,18 +26,18 @@ function today() {
 }
 
 // "No source, no fact": a cited source must exist in the sources table.
-async function sourceExists(sourceId) {
+async async function sourceExists(sourceId) {
   return Boolean(await db.get("SELECT source_id FROM sources WHERE source_id = ?", [sourceId]));
 }
 
-async function ruleExists(ruleId) {
-  return Boolean(db.get("SELECT rule_id FROM rules WHERE rule_id = ?", [ruleId]));
+async async function ruleExists(ruleId) {
+  return Boolean(await db.get("SELECT rule_id FROM rules WHERE rule_id = ?", [ruleId]));
 }
 
 // ---------------------------------------------------------------
 // FACTS (add, edit, archive)
 // ---------------------------------------------------------------
-async function nextFactId() {
+async async function nextFactId() {
   const rows = await db.query("SELECT fact_id FROM facts");
   let max = 0;
   for (const row of rows) {
@@ -47,13 +47,13 @@ async function nextFactId() {
   return "F-" + String(max + 1).padStart(2, "0");
 }
 
-async function getSources() {
+async async function getSources() {
   const sources = await checkStaleSources();
   return { status: 200, data: { sources } };
 }
 
 // Archived facts are hidden unless you ask for them with ?status=all
-async function getFacts(query = {}) {
+async async function getFacts(query = {}) {
   const facts =
     query.status === "all"
       ? await db.query("SELECT * FROM facts ORDER BY product_code ASC, fact_id ASC")
@@ -61,7 +61,7 @@ async function getFacts(query = {}) {
   return { status: 200, data: { facts } };
 }
 
-async function createFact(body, user) {
+async async function createFact(body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -76,7 +76,7 @@ async function createFact(body, user) {
   if (!sourceId) {
     return { status: 400, data: { error: "source_id is required. No source, no fact." } };
   }
-  if (!(await sourceExists(sourceId))) {
+  if (!(await sourceExists(sourceId)))) {
     return { status: 400, data: { error: "Unknown source_id: " + sourceId } };
   }
 
@@ -91,7 +91,7 @@ async function createFact(body, user) {
   return { status: 201, data: { fact: await db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-async function updateFact(factId, body, user) {
+async async function updateFact(factId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -122,19 +122,19 @@ async function updateFact(factId, body, user) {
     }
   }
 
-  if (!next.source_id || !(await sourceExists(next.source_id))) {
+  if (!next.source_id || !(await sourceExists(next.source_id)))) {
     return { status: 400, data: { error: "Unknown source_id: " + next.source_id } };
   }
 
-  db.run(
+  await db.run(
     "UPDATE facts SET product_code = ?, fact_key = ?, fact_value = ?, source_id = ?, owner = ?, verified_date = ? WHERE fact_id = ?",
     [next.product_code, next.fact_key, next.fact_value, next.source_id, next.owner || null, today(), factId]
   );
 
-  return { status: 200, data: { fact: db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
+  return { status: 200, data: { fact: await db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-async function archiveFact(factId, user) {
+async async function archiveFact(factId, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -143,8 +143,8 @@ async function archiveFact(factId, user) {
     return { status: 404, data: { error: "Fact " + factId + " not found." } };
   }
 
-  db.run("UPDATE facts SET status = 'archived' WHERE fact_id = ?", [factId]);
-  return { status: 200, data: { fact: db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
+  await db.run("UPDATE facts SET status = 'archived' WHERE fact_id = ?", [factId]);
+  return { status: 200, data: { fact: await db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
 // ---------------------------------------------------------------
@@ -168,7 +168,7 @@ const KINDS = {
       effective_date: { type: "date", required: false, default: today },
       source_id: { type: "source", required: true }
     },
-    async check(values, selfId) {
+    async async check(values, selfId) {
       const clash = await db.get(
         "SELECT price_id FROM prices WHERE product_code = ? AND archived = 0 AND price_id != ?",
         [values.product_code, selfId]
@@ -202,7 +202,7 @@ const KINDS = {
       max_discount_inr: { type: "int", min: 0, required: false },
       status: { type: "enum", options: ["active", "expired"], required: false, default: "active" }
     },
-    check(values, selfId) {
+    async check(values, selfId) {
       if (values.valid_from > values.valid_to) {
         return "valid_from must not be after valid_to.";
       }
@@ -299,13 +299,13 @@ function readField(name, spec, raw) {
       return { value: raw.slice(0, 120) };
     }
     case "source": {
-      if (typeof raw !== "string" || !sourceExists(raw)) {
+      if (typeof raw !== "string" || !sourceExists(raw))) {
         return { error: "Unknown source_id: " + raw };
       }
       return { value: raw };
     }
     case "rule": {
-      if (typeof raw !== "string" || !ruleExists(raw)) {
+      if (typeof raw !== "string" || !ruleExists(raw))) {
         return { error: "Unknown rule_ref: " + raw + ". See GET /api/library/rules for valid ones." };
       }
       return { value: raw };
@@ -315,8 +315,8 @@ function readField(name, spec, raw) {
   }
 }
 
-async function nextId(def) {
-  const rows = db.query("SELECT " + def.idColumn + " AS id FROM " + def.table);
+async async function nextId(def) {
+  const rows = await db.query("SELECT " + def.idColumn + " AS id FROM " + def.table);
   const pattern = new RegExp("^" + def.prefix + "-(\\d+)$");
   let max = 0;
   for (const row of rows) {
@@ -326,14 +326,14 @@ async function nextId(def) {
   return def.prefix + "-" + String(max + 1).padStart(2, "0");
 }
 
-async function listKind(kind, query = {}) {
+async async function listKind(kind, query = {}) {
   const def = KINDS[kind];
   const where = query.status === "all" ? "" : " WHERE archived = 0";
   const items = await db.query("SELECT * FROM " + def.table + where + " ORDER BY " + def.orderBy);
   return { status: 200, data: { [def.table]: items } };
 }
 
-async function createItem(kind, body, user) {
+async async function createItem(kind, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -356,7 +356,7 @@ async function createItem(kind, body, user) {
   const columns = [def.idColumn, ...names, "owner", "last_checked"];
   const params = [id, ...names.map((n) => values[n]), owner, today()];
 
-  db.run(
+  await db.run(
     "INSERT INTO " + def.table + " (" + columns.join(", ") + ") VALUES (" + columns.map(() => "?").join(", ") + ")",
     params
   );
@@ -365,14 +365,14 @@ async function createItem(kind, body, user) {
   return { status: 201, data: { [def.singular]: row } };
 }
 
-async function updateItem(kind, itemId, body, user) {
+async async function updateItem(kind, itemId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
   const def = KINDS[kind];
   if (!def) return { status: 404, data: { error: "Unknown library item type." } };
 
-  const existing = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
+  const existing = await db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
   if (!existing) return { status: 404, data: { error: itemId + " not found." } };
   if (existing.archived === 1) {
     return { status: 409, data: { error: itemId + " is archived and cannot be edited." } };
@@ -399,55 +399,55 @@ async function updateItem(kind, itemId, body, user) {
   const setClause = [...names, "owner", "last_checked"].map((c) => c + " = ?").join(", ");
   const params = [...names.map((n) => values[n]), owner || null, today(), itemId];
 
-  db.run("UPDATE " + def.table + " SET " + setClause + " WHERE " + def.idColumn + " = ?", params);
+  await db.run("UPDATE " + def.table + " SET " + setClause + " WHERE " + def.idColumn + " = ?", params);
 
-  const row = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
+  const row = await db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
   return { status: 200, data: { [def.singular]: row } };
 }
 
-async function archiveItem(kind, itemId, user) {
+async async function archiveItem(kind, itemId, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
   const def = KINDS[kind];
   if (!def) return { status: 404, data: { error: "Unknown library item type." } };
 
-  const existing = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
+  const existing = await db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
   if (!existing) return { status: 404, data: { error: itemId + " not found." } };
 
-  db.run("UPDATE " + def.table + " SET archived = 1, last_checked = ? WHERE " + def.idColumn + " = ?", [today(), itemId]);
+  await db.run("UPDATE " + def.table + " SET archived = 1, last_checked = ? WHERE " + def.idColumn + " = ?", [today(), itemId]);
 
-  const row = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
+  const row = await db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [itemId]);
   return { status: 200, data: { [def.singular]: row } };
 }
 
-async function getPrices(query) {
+async async function getPrices(query) {
   return listKind("prices", query);
 }
 
-async function getOffers(query) {
+async async function getOffers(query) {
   return listKind("offers", query);
 }
 
-async function getClaims(query) {
+async async function getClaims(query) {
   return listKind("claims", query);
 }
 
-async function getTerms(query) {
+async async function getTerms(query) {
   return listKind("terms", query);
 }
 
-async function getRules() {
+async async function getRules() {
   const rules = await db.query("SELECT * FROM rules ORDER BY rule_id ASC");
   return { status: 200, data: { rules } };
 }
 
-async function getProtectedNames() {
+async async function getProtectedNames() {
   const protectedNames = await db.query("SELECT * FROM protected_names");
   return { status: 200, data: { protected_names: protectedNames } };
 }
 
-async function getRegionalNotes() {
+async async function getRegionalNotes() {
   const regionalNotes = await db.query("SELECT * FROM regional_notes");
   return { status: 200, data: { regional_notes: regionalNotes } };
 }
@@ -455,7 +455,7 @@ async function getRegionalNotes() {
 // ---------------------------------------------------------------
 // UNIFIED LIBRARY & PATCH (GET /api/library & PATCH /api/library/:id)
 // ---------------------------------------------------------------
-async function getUnifiedLibrary() {
+async async function getUnifiedLibrary() {
   const sources = checkStaleSources().map((s) => ({
     ...s,
     id: s.source_id,
@@ -463,14 +463,14 @@ async function getUnifiedLibrary() {
     last_checked_at: s.last_verified_date
   }));
 
-  const facts = (await db.query("SELECT * FROM facts WHERE status = 'active' ORDER BY product_code ASC, fact_id ASC")).map((f) => ({
+  const facts = ((await db.query("SELECT * FROM facts WHERE status = 'active' ORDER BY product_code ASC, fact_id ASC"))).map((f) => ({
     ...f,
     id: f.fact_id,
     kind: "fact",
     last_checked_at: f.verified_date
   }));
 
-  const rules = db.query("SELECT * FROM rules ORDER BY rule_id ASC").map((r) => {
+  const rules = (await db.query("SELECT * FROM rules ORDER BY rule_id ASC")).map((r) => {
     const src = r.source_id
       ? await db.get("SELECT owner, last_verified_date FROM sources WHERE source_id = ?", [r.source_id])
       : null;
@@ -483,28 +483,28 @@ async function getUnifiedLibrary() {
     };
   });
 
-  const prices = (await db.query("SELECT * FROM prices WHERE archived = 0 ORDER BY current_price_inr DESC")).map((p) => ({
+  const prices = ((await db.query("SELECT * FROM prices WHERE archived = 0 ORDER BY current_price_inr DESC"))).map((p) => ({
     ...p,
     id: p.price_id,
     kind: "price",
     last_checked_at: p.last_checked || p.effective_date
   }));
 
-  const offers = (await db.query("SELECT * FROM offers WHERE archived = 0 ORDER BY status ASC, offer_id ASC")).map((o) => ({
+  const offers = ((await db.query("SELECT * FROM offers WHERE archived = 0 ORDER BY status ASC, offer_id ASC"))).map((o) => ({
     ...o,
     id: o.offer_id,
     kind: "offer",
     last_checked_at: o.last_checked || o.valid_from
   }));
 
-  const claims = (await db.query("SELECT * FROM claims WHERE archived = 0 ORDER BY status ASC, claim_id ASC")).map((c) => ({
+  const claims = ((await db.query("SELECT * FROM claims WHERE archived = 0 ORDER BY status ASC, claim_id ASC"))).map((c) => ({
     ...c,
     id: c.claim_id,
     kind: "claim",
     last_checked_at: c.last_checked || null
   }));
 
-  const terms = (await db.query("SELECT * FROM terms WHERE archived = 0 ORDER BY category ASC, term_id ASC")).map((t) => ({
+  const terms = ((await db.query("SELECT * FROM terms WHERE archived = 0 ORDER BY category ASC, term_id ASC"))).map((t) => ({
     ...t,
     id: t.term_id,
     kind: "term",
@@ -526,7 +526,7 @@ async function getUnifiedLibrary() {
   };
 }
 
-async function patchLibraryItem(rawId, body, user) {
+async async function patchLibraryItem(rawId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -546,7 +546,7 @@ async function patchLibraryItem(rawId, body, user) {
   const source = await db.get("SELECT * FROM sources WHERE source_id = ?", [id]);
   if (source) {
     const nextOwner = cleanText(input.owner, 80) || source.owner;
-    db.run(
+    await db.run(
       "UPDATE sources SET last_verified_date = ?, status = 'current', owner = ? WHERE source_id = ?",
       [checkedDate, nextOwner, id]
     );
@@ -562,11 +562,11 @@ async function patchLibraryItem(rawId, body, user) {
   if (fact) {
     const nextValue = cleanText(input.fact_value, 300) || fact.fact_value;
     const nextOwner = cleanText(input.owner, 80) || fact.owner;
-    db.run(
+    await db.run(
       "UPDATE facts SET verified_date = ?, fact_value = ?, owner = ? WHERE fact_id = ?",
       [checkedDate, nextValue, nextOwner, id]
     );
-    const updated = db.get("SELECT * FROM facts WHERE fact_id = ?", [id]);
+    const updated = await db.get("SELECT * FROM facts WHERE fact_id = ?", [id]);
     return {
       status: 200,
       data: { item: { ...updated, id: updated.fact_id, last_checked_at: updated.verified_date } }
@@ -578,8 +578,8 @@ async function patchLibraryItem(rawId, body, user) {
   if (rule) {
     const nextText = cleanText(input.text ?? input.wording ?? input.currentWording, 1000) || rule.text;
     const nextTitle = cleanText(input.title, 120) || rule.title;
-    db.run("UPDATE rules SET text = ?, title = ? WHERE rule_id = ?", [nextText, nextTitle, id]);
-    const updated = db.get("SELECT * FROM rules WHERE rule_id = ?", [id]);
+    await db.run("UPDATE rules SET text = ?, title = ? WHERE rule_id = ?", [nextText, nextTitle, id]);
+    const updated = await db.get("SELECT * FROM rules WHERE rule_id = ?", [id]);
     return {
       status: 200,
       data: { item: { ...updated, id: updated.rule_id } }
@@ -589,14 +589,14 @@ async function patchLibraryItem(rawId, body, user) {
   // 4. Prices / Offers / Claims / Terms
   for (const kind of Object.keys(KINDS)) {
     const def = KINDS[kind];
-    const row = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
+    const row = await db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
     if (row) {
       const nextOwner = cleanText(input.owner, 80) || row.owner;
-      db.run(
+      await db.run(
         "UPDATE " + def.table + " SET last_checked = ?, owner = ? WHERE " + def.idColumn + " = ?",
         [checkedDate, nextOwner || null, id]
       );
-      const updated = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
+      const updated = await db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
       return {
         status: 200,
         data: { item: { ...updated, id: updated[def.idColumn], last_checked_at: updated.last_checked } }
