@@ -1,6 +1,8 @@
 // Idempotent PostgreSQL seed: inserts only missing reference rows and never overwrites edits.
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+const config = require("../config");
 const db = require("./database");
 
 function parseCSV(content) {
@@ -65,6 +67,17 @@ async function insertMissing(table, columns, row) {
 
 async function seedPostgresDatabase() {
   if (!db.isPostgres) throw new Error("PostgreSQL DATABASE_URL is required for this seed.");
+  // Keep demo-login credentials compatible with the existing SQLite seed.
+  // ON CONFLICT DO NOTHING ensures existing user records are never overwritten.
+  for (const user of config.DEMO_USERS) {
+    const passwordHash = crypto.pbkdf2Sync(
+      user.password, "truevoice-salt-2026", 1000, 32, "sha256"
+    ).toString("hex");
+    await insertMissing("users",
+      ["id", "name", "email", "password_hash", "role", "created_at"],
+      { ...user, password_hash: passwordHash, created_at: new Date().toISOString() }
+    );
+  }
   const dir = path.join(__dirname, "..", "data");
   const csv = (name) => parseCSV(fs.readFileSync(path.join(dir, name), "utf8"));
 
