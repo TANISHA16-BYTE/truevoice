@@ -1,6 +1,12 @@
 # TrueVoice Backend 🛡️
 > **"Check it before you publish it. Every finding shows its source. A human decides."**
 
+## 🌐 Live Deployment
+
+**TrueVoice Web App:** https://truevoice-devvibe.vercel.app
+
+
+
 [![Status: Production-Ready](https://img.shields.io/badge/Status-Production--Ready-brightgreen.svg)]()
 [![Precision: 100%](https://img.shields.io/badge/Precision-100%25-blue.svg)]()
 [![Serious Issue Detection: 100%](https://img.shields.io/badge/Detection-100%25-success.svg)]()
