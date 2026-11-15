@@ -1,4 +1,9 @@
 # TrueVoice 🛡️
+
+## 🌐 Live Deployment
+
+**TrueVoice Web App:** https://truevoice-devvibe.vercel.app
+
 > **"Check it before you publish it. Every finding shows its source. A human decides."**
 
 [![Status: Production-Ready](https://img.shields.io/badge/Status-Production--Ready-brightgreen.svg)]()
