@@ -123,6 +123,54 @@ async function seedPostgresDatabase() {
     row.text = row.text.trim();
     await insertMissing("rules", ["rule_id","section","title","text","source_id"], row);
   }
+
+  // Seed the same four demo review-queue drafts as SQLite, without replacing edits.
+  const demoDrafts = [
+    {
+      id: "drf_demo_01", title: "Email_Launch.docx",
+      content: "Our serum is clinically proven to remove wrinkles in 3 days. Launching Friday 20 Nov with flat 30% off!",
+      channel: "Email", product_code: "GV-SER-30", risk_level: "HIGH", status: "submitted",
+      findings: [
+        ["fnd_d01_1","prohibited_claim","HIGH","clinically proven","Claims 3.1","S-01","Rule: health or beauty claims need an approved study. None found, so it is marked Unverified, needs source.","Formulated with hyaluronic acid to help skin look smoother (an approved fact)"],
+        ["fnd_d01_2","offer_violation","HIGH","flat 30% off","Offers 2.2","S-08","The approved offer sheet says 20% off, valid 20-30 Nov 2026.","Flat 20% off"],
+        ["fnd_d01_3","schedule_clash","MEDIUM","Friday 20 Nov","Schedule 5.1","S-01","Clash: an Instagram post scheduled for Thu 19 Nov announces the same launch.","Match the date across channels, or ask the campaign owner."]
+      ]
+    },
+    {
+      id: "drf_demo_02", title: "Banner_Diwali.png",
+      content: "Celebrate this festive season with radiant skin. Use WELCOME10 for 10% off your first order.",
+      channel: "Display Ads", product_code: "ALL", risk_level: "LOW", status: "in_review", findings: []
+    },
+    {
+      id: "drf_demo_03", title: "Deck_Q4_Sales.pptx",
+      content: "Introducing Dewlite alternative serum with cruelty-free certified testing for our Q4 sales partners.",
+      channel: "Sales", product_code: "GV-SER-30", risk_level: "MEDIUM", status: "submitted",
+      findings: [
+        ["fnd_d03_1","trademark_warning","MEDIUM","Dewlite","Naming 4.1","S-09","Heads up: this sounds similar to Dewlite (Lumina Cosmetics). This is an AI suggestion, not legal advice. Please consult your legal team.","Verify non-infringement with Legal Team"],
+        ["fnd_d03_2","restricted_claim","MEDIUM","cruelty-free certified","Claims 3.3","S-06","Underlying source (S-06) expired on 2025-10-01 and certificate review is overdue.","Hold claim until Quality Team uploads renewed certificate"]
+      ]
+    },
+    {
+      id: "drf_demo_04", title: "Post_Teaser.txt",
+      content: "Something fresh is arriving. Hydra Glow Serum with 2% hyaluronic acid for deep hydration.",
+      channel: "Instagram", product_code: "GV-SER-30", risk_level: "LOW", status: "in_review", findings: []
+    }
+  ];
+  const demoNow = new Date().toISOString();
+  for (const draft of demoDrafts) {
+    await insertMissing("drafts",
+      ["id","title","content","original_content","channel","product_code","creator_id","status","risk_level","created_at","updated_at"],
+      { ...draft, original_content: draft.content, creator_id: "usr_creator_01", created_at: demoNow, updated_at: demoNow }
+    );
+    for (const finding of draft.findings) {
+      const [id,type,severity,flagged_text,rule_ref,source_id,reason,suggested_fix] = finding;
+      await insertMissing("findings",
+        ["id","draft_id","type","severity","flagged_text","rule_ref","source_id","reason","suggested_fix","confidence","status","created_at"],
+        { id, draft_id: draft.id, type, severity, flagged_text, rule_ref, source_id, reason, suggested_fix, confidence: 1, status: "pending", created_at: demoNow }
+      );
+    }
+  }
+
   console.log("TrueVoice PostgreSQL reference data seeded (existing rows preserved).");
 }
 
