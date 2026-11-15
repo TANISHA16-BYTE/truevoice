@@ -3,6 +3,7 @@ const http = require("node:http");
 const config = require("./src/config");
 const { getUserFromToken } = require("./src/services/authService");
 const { seedDatabase } = require("./src/db/seed");
+const { seedPostgresDatabase } = require("./src/db/seed-postgres");
 
 // Controllers & Services
 const authCtrl = require("./src/controllers/authController");
@@ -424,8 +425,16 @@ function startServer(port = config.PORT) {
 }
 
 if (require.main === module) {
-  if (!config.DATABASE_URL) seedDatabase();
-  startServer();
+  (async () => {
+    try {
+      if (config.DATABASE_URL) await seedPostgresDatabase();
+      else seedDatabase();
+      await startServer();
+    } catch (error) {
+      console.error("TrueVoice startup failed:", error);
+      process.exitCode = 1;
+    }
+  })();
 }
 
 module.exports = { server, startServer };
