@@ -26,19 +26,19 @@ function today() {
 }
 
 // "No source, no fact": a cited source must exist in the sources table.
-function sourceExists(sourceId) {
-  return Boolean(db.get("SELECT source_id FROM sources WHERE source_id = ?", [sourceId]));
+async function sourceExists(sourceId) {
+  return Boolean(await db.get("SELECT source_id FROM sources WHERE source_id = ?", [sourceId]));
 }
 
-function ruleExists(ruleId) {
+async function ruleExists(ruleId) {
   return Boolean(db.get("SELECT rule_id FROM rules WHERE rule_id = ?", [ruleId]));
 }
 
 // ---------------------------------------------------------------
 // FACTS (add, edit, archive)
 // ---------------------------------------------------------------
-function nextFactId() {
-  const rows = db.query("SELECT fact_id FROM facts");
+async function nextFactId() {
+  const rows = await db.query("SELECT fact_id FROM facts");
   let max = 0;
   for (const row of rows) {
     const match = /^F-(\d+)$/.exec(row.fact_id);
@@ -47,21 +47,21 @@ function nextFactId() {
   return "F-" + String(max + 1).padStart(2, "0");
 }
 
-function getSources() {
-  const sources = checkStaleSources();
+async function getSources() {
+  const sources = await checkStaleSources();
   return { status: 200, data: { sources } };
 }
 
 // Archived facts are hidden unless you ask for them with ?status=all
-function getFacts(query = {}) {
+async function getFacts(query = {}) {
   const facts =
     query.status === "all"
-      ? db.query("SELECT * FROM facts ORDER BY product_code ASC, fact_id ASC")
-      : db.query("SELECT * FROM facts WHERE status = 'active' ORDER BY product_code ASC, fact_id ASC");
+      ? await db.query("SELECT * FROM facts ORDER BY product_code ASC, fact_id ASC")
+      : await db.query("SELECT * FROM facts WHERE status = 'active' ORDER BY product_code ASC, fact_id ASC");
   return { status: 200, data: { facts } };
 }
 
-function createFact(body, user) {
+async function createFact(body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -76,26 +76,26 @@ function createFact(body, user) {
   if (!sourceId) {
     return { status: 400, data: { error: "source_id is required. No source, no fact." } };
   }
-  if (!sourceExists(sourceId)) {
+  if (!(await sourceExists(sourceId))) {
     return { status: 400, data: { error: "Unknown source_id: " + sourceId } };
   }
 
-  const factId = nextFactId();
+  const factId = await nextFactId();
   const owner = cleanText(body && body.owner, 80) || user.name || user.id || "unknown";
 
-  db.run(
+  await db.run(
     "INSERT INTO facts (fact_id, product_code, fact_key, fact_value, source_id, verified_date, owner, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')",
     [factId, productCode, factKey, factValue, sourceId, today(), owner]
   );
 
-  return { status: 201, data: { fact: db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
+  return { status: 201, data: { fact: await db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-function updateFact(factId, body, user) {
+async function updateFact(factId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
-  const existing = db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]);
+  const existing = await db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]);
   if (!existing) {
     return { status: 404, data: { error: "Fact " + factId + " not found." } };
   }
@@ -122,7 +122,7 @@ function updateFact(factId, body, user) {
     }
   }
 
-  if (!next.source_id || !sourceExists(next.source_id)) {
+  if (!next.source_id || !(await sourceExists(next.source_id))) {
     return { status: 400, data: { error: "Unknown source_id: " + next.source_id } };
   }
 
@@ -134,11 +134,11 @@ function updateFact(factId, body, user) {
   return { status: 200, data: { fact: db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]) } };
 }
 
-function archiveFact(factId, user) {
+async function archiveFact(factId, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
-  const existing = db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]);
+  const existing = await db.get("SELECT * FROM facts WHERE fact_id = ?", [factId]);
   if (!existing) {
     return { status: 404, data: { error: "Fact " + factId + " not found." } };
   }
@@ -168,8 +168,8 @@ const KINDS = {
       effective_date: { type: "date", required: false, default: today },
       source_id: { type: "source", required: true }
     },
-    check(values, selfId) {
-      const clash = db.get(
+    async check(values, selfId) {
+      const clash = await db.get(
         "SELECT price_id FROM prices WHERE product_code = ? AND archived = 0 AND price_id != ?",
         [values.product_code, selfId]
       );
@@ -206,7 +206,7 @@ const KINDS = {
       if (values.valid_from > values.valid_to) {
         return "valid_from must not be after valid_to.";
       }
-      const clash = db.get(
+      const clash = await db.get(
         "SELECT offer_id FROM offers WHERE code = ? AND archived = 0 AND offer_id != ?",
         [values.code, selfId]
       );
@@ -315,7 +315,7 @@ function readField(name, spec, raw) {
   }
 }
 
-function nextId(def) {
+async function nextId(def) {
   const rows = db.query("SELECT " + def.idColumn + " AS id FROM " + def.table);
   const pattern = new RegExp("^" + def.prefix + "-(\\d+)$");
   let max = 0;
@@ -326,14 +326,14 @@ function nextId(def) {
   return def.prefix + "-" + String(max + 1).padStart(2, "0");
 }
 
-function listKind(kind, query = {}) {
+async function listKind(kind, query = {}) {
   const def = KINDS[kind];
   const where = query.status === "all" ? "" : " WHERE archived = 0";
-  const items = db.query("SELECT * FROM " + def.table + where + " ORDER BY " + def.orderBy);
+  const items = await db.query("SELECT * FROM " + def.table + where + " ORDER BY " + def.orderBy);
   return { status: 200, data: { [def.table]: items } };
 }
 
-function createItem(kind, body, user) {
+async function createItem(kind, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -350,7 +350,7 @@ function createItem(kind, body, user) {
   const problem = def.check ? def.check(values, "") : null;
   if (problem) return { status: 400, data: { error: problem } };
 
-  const id = nextId(def);
+  const id = await nextId(def);
   const owner = cleanText(body && body.owner, 80) || user.name || user.id || "unknown";
   const names = Object.keys(def.fields);
   const columns = [def.idColumn, ...names, "owner", "last_checked"];
@@ -361,11 +361,11 @@ function createItem(kind, body, user) {
     params
   );
 
-  const row = db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
+  const row = await db.get("SELECT * FROM " + def.table + " WHERE " + def.idColumn + " = ?", [id]);
   return { status: 201, data: { [def.singular]: row } };
 }
 
-function updateItem(kind, itemId, body, user) {
+async function updateItem(kind, itemId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -405,7 +405,7 @@ function updateItem(kind, itemId, body, user) {
   return { status: 200, data: { [def.singular]: row } };
 }
 
-function archiveItem(kind, itemId, user) {
+async function archiveItem(kind, itemId, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -421,41 +421,41 @@ function archiveItem(kind, itemId, user) {
   return { status: 200, data: { [def.singular]: row } };
 }
 
-function getPrices(query) {
+async function getPrices(query) {
   return listKind("prices", query);
 }
 
-function getOffers(query) {
+async function getOffers(query) {
   return listKind("offers", query);
 }
 
-function getClaims(query) {
+async function getClaims(query) {
   return listKind("claims", query);
 }
 
-function getTerms(query) {
+async function getTerms(query) {
   return listKind("terms", query);
 }
 
-function getRules() {
-  const rules = db.query("SELECT * FROM rules ORDER BY rule_id ASC");
+async function getRules() {
+  const rules = await db.query("SELECT * FROM rules ORDER BY rule_id ASC");
   return { status: 200, data: { rules } };
 }
 
-function getProtectedNames() {
-  const protectedNames = db.query("SELECT * FROM protected_names");
+async function getProtectedNames() {
+  const protectedNames = await db.query("SELECT * FROM protected_names");
   return { status: 200, data: { protected_names: protectedNames } };
 }
 
-function getRegionalNotes() {
-  const regionalNotes = db.query("SELECT * FROM regional_notes");
+async function getRegionalNotes() {
+  const regionalNotes = await db.query("SELECT * FROM regional_notes");
   return { status: 200, data: { regional_notes: regionalNotes } };
 }
 
 // ---------------------------------------------------------------
 // UNIFIED LIBRARY & PATCH (GET /api/library & PATCH /api/library/:id)
 // ---------------------------------------------------------------
-function getUnifiedLibrary() {
+async function getUnifiedLibrary() {
   const sources = checkStaleSources().map((s) => ({
     ...s,
     id: s.source_id,
@@ -463,7 +463,7 @@ function getUnifiedLibrary() {
     last_checked_at: s.last_verified_date
   }));
 
-  const facts = db.query("SELECT * FROM facts WHERE status = 'active' ORDER BY product_code ASC, fact_id ASC").map((f) => ({
+  const facts = (await db.query("SELECT * FROM facts WHERE status = 'active' ORDER BY product_code ASC, fact_id ASC")).map((f) => ({
     ...f,
     id: f.fact_id,
     kind: "fact",
@@ -472,7 +472,7 @@ function getUnifiedLibrary() {
 
   const rules = db.query("SELECT * FROM rules ORDER BY rule_id ASC").map((r) => {
     const src = r.source_id
-      ? db.get("SELECT owner, last_verified_date FROM sources WHERE source_id = ?", [r.source_id])
+      ? await db.get("SELECT owner, last_verified_date FROM sources WHERE source_id = ?", [r.source_id])
       : null;
     return {
       ...r,
@@ -483,28 +483,28 @@ function getUnifiedLibrary() {
     };
   });
 
-  const prices = db.query("SELECT * FROM prices WHERE archived = 0 ORDER BY current_price_inr DESC").map((p) => ({
+  const prices = (await db.query("SELECT * FROM prices WHERE archived = 0 ORDER BY current_price_inr DESC")).map((p) => ({
     ...p,
     id: p.price_id,
     kind: "price",
     last_checked_at: p.last_checked || p.effective_date
   }));
 
-  const offers = db.query("SELECT * FROM offers WHERE archived = 0 ORDER BY status ASC, offer_id ASC").map((o) => ({
+  const offers = (await db.query("SELECT * FROM offers WHERE archived = 0 ORDER BY status ASC, offer_id ASC")).map((o) => ({
     ...o,
     id: o.offer_id,
     kind: "offer",
     last_checked_at: o.last_checked || o.valid_from
   }));
 
-  const claims = db.query("SELECT * FROM claims WHERE archived = 0 ORDER BY status ASC, claim_id ASC").map((c) => ({
+  const claims = (await db.query("SELECT * FROM claims WHERE archived = 0 ORDER BY status ASC, claim_id ASC")).map((c) => ({
     ...c,
     id: c.claim_id,
     kind: "claim",
     last_checked_at: c.last_checked || null
   }));
 
-  const terms = db.query("SELECT * FROM terms WHERE archived = 0 ORDER BY category ASC, term_id ASC").map((t) => ({
+  const terms = (await db.query("SELECT * FROM terms WHERE archived = 0 ORDER BY category ASC, term_id ASC")).map((t) => ({
     ...t,
     id: t.term_id,
     kind: "term",
@@ -526,7 +526,7 @@ function getUnifiedLibrary() {
   };
 }
 
-function patchLibraryItem(rawId, body, user) {
+async function patchLibraryItem(rawId, body, user) {
   const denied = requireEditor(user);
   if (denied) return denied;
 
@@ -543,14 +543,14 @@ function patchLibraryItem(rawId, body, user) {
   const checkedDate = hasDate ? input.last_checked_at : today();
 
   // 1. Source (e.g. S-06)
-  const source = db.get("SELECT * FROM sources WHERE source_id = ?", [id]);
+  const source = await db.get("SELECT * FROM sources WHERE source_id = ?", [id]);
   if (source) {
     const nextOwner = cleanText(input.owner, 80) || source.owner;
     db.run(
       "UPDATE sources SET last_verified_date = ?, status = 'current', owner = ? WHERE source_id = ?",
       [checkedDate, nextOwner, id]
     );
-    const updated = db.get("SELECT * FROM sources WHERE source_id = ?", [id]);
+    const updated = await db.get("SELECT * FROM sources WHERE source_id = ?", [id]);
     return {
       status: 200,
       data: { item: { ...updated, id: updated.source_id, last_checked_at: updated.last_verified_date } }
@@ -558,7 +558,7 @@ function patchLibraryItem(rawId, body, user) {
   }
 
   // 2. Fact (e.g. F-01)
-  const fact = db.get("SELECT * FROM facts WHERE fact_id = ?", [id]);
+  const fact = await db.get("SELECT * FROM facts WHERE fact_id = ?", [id]);
   if (fact) {
     const nextValue = cleanText(input.fact_value, 300) || fact.fact_value;
     const nextOwner = cleanText(input.owner, 80) || fact.owner;
@@ -574,7 +574,7 @@ function patchLibraryItem(rawId, body, user) {
   }
 
   // 3. Rule (e.g. "Tone 1.3") -> used by Guideline Health Score "Save clearer wording"
-  const rule = db.get("SELECT * FROM rules WHERE rule_id = ?", [id]);
+  const rule = await db.get("SELECT * FROM rules WHERE rule_id = ?", [id]);
   if (rule) {
     const nextText = cleanText(input.text ?? input.wording ?? input.currentWording, 1000) || rule.text;
     const nextTitle = cleanText(input.title, 120) || rule.title;
