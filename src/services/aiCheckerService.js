@@ -7,7 +7,7 @@ const path = require("path");
 const { getLearnedCorrections } = require("./regionalNuanceService");
 
 // The model name comes from GEMINI_MODEL in .env (see Google's models page for current names).
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const GEMINI_TIMEOUT_MS = 15000; // stop waiting after 15 seconds so the demo never hangs
 const VALID_SEVERITIES = ["LOW", "MEDIUM", "HIGH"];
 
