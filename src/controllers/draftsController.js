@@ -14,7 +14,7 @@ function requireUser(user) {
   return user ? null : failure(401, "Authentication required.");
 }
 
-function requireCreator(user) {
+async function requireCreator(user) {
   const auth = requireUser(user);
   if (auth) return auth;
   if (user.role !== "creator") {
@@ -23,7 +23,7 @@ function requireCreator(user) {
   return null;
 }
 
-function requireReviewer(user) {
+async function requireReviewer(user) {
   const auth = requireUser(user);
   if (auth) return auth;
   if (!REVIEWER_ROLES.includes(user.role)) {
@@ -32,7 +32,7 @@ function requireReviewer(user) {
   return null;
 }
 
-function findAuthorizedDraft(draftId, user, allowedRoles) {
+async function findAuthorizedDraft(draftId, user, allowedRoles) {
   const auth = requireUser(user);
   if (auth) return { error: auth };
 
@@ -40,7 +40,7 @@ function findAuthorizedDraft(draftId, user, allowedRoles) {
     return { error: failure(403, "You do not have permission for this action.") };
   }
 
-  const draft = db.get("SELECT * FROM drafts WHERE id = ?", [draftId]);
+  const draft = await db.get("SELECT * FROM drafts WHERE id = ?", [draftId]);
   if (!draft) return { error: failure(404, "Draft not found.") };
 
   if (user.role === "creator" && draft.creator_id !== user.id) {
@@ -50,9 +50,9 @@ function findAuthorizedDraft(draftId, user, allowedRoles) {
   return { draft };
 }
 
-function logHistory(draftId, actorId, actorName, action, details) {
+async function await logHistory(draftId, actorId, actorName, action, details) {
   const id = "hist_" + crypto.randomBytes(4).toString("hex");
-  db.run(
+  await db.run(
     "INSERT INTO draft_history (id, draft_id, actor_id, actor_name, action, details, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [id, draftId, actorId, actorName, action, details, new Date().toISOString()]
   );
@@ -125,7 +125,7 @@ async function createDraft(body, user) {
   };
 }
 
-function listDrafts(query = {}, user) {
+async function listDrafts(query = {}, user) {
   const auth = requireUser(user);
   if (auth) return auth;
 
@@ -157,7 +157,7 @@ function listDrafts(query = {}, user) {
 
   sql += " ORDER BY CASE risk_level WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END ASC, created_at DESC";
 
-  const drafts = db.query(sql, params);
+  const drafts = await db.query(sql, params);
   const results = drafts.map(d => {
     const findingsCount = db.get(
       "SELECT COUNT(*) as count FROM findings WHERE draft_id = ?", [d.id]
@@ -176,21 +176,21 @@ function listDrafts(query = {}, user) {
   return { status: 200, data: { drafts: results } };
 }
 
-function getDraftDetails(draftId, user) {
-  const result = findAuthorizedDraft(
+async function getDraftDetails(draftId, user) {
+  const result = await findAuthorizedDraft(
     draftId, user, ["creator", ...REVIEWER_ROLES]
   );
   if (result.error) return result.error;
 
-  const findings = db.query(
+  const findings = await db.query(
     "SELECT * FROM findings WHERE draft_id = ? ORDER BY CASE severity WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END ASC",
     [draftId]
   );
-  const history = db.query(
+  const history = await db.query(
     "SELECT * FROM draft_history WHERE draft_id = ? ORDER BY timestamp ASC",
     [draftId]
   );
-  const badge = db.get(
+  const badge = await db.get(
     "SELECT * FROM approval_badges WHERE draft_id = ?", [draftId]
   );
 
@@ -200,7 +200,7 @@ function getDraftDetails(draftId, user) {
   };
 }
 
-function explainFinding(draftId, findingId, body, user) {
+async function explainFinding(draftId, findingId, body, user) {
   const access = findAuthorizedDraft(draftId, user, ["creator"]);
   if (access.error) return access.error;
 
@@ -210,7 +210,7 @@ function explainFinding(draftId, findingId, body, user) {
     return failure(400, "Explanation text is required.");
   }
 
-  const finding = db.get(
+  const finding = await db.get(
     "SELECT * FROM findings WHERE id = ? AND draft_id = ?",
     [findingId, draftId]
   );
@@ -255,7 +255,7 @@ function explainFinding(draftId, findingId, body, user) {
   };
 }
 
-function handoverToManager(draftId, body, user) {
+async function handoverToManager(draftId, body, user) {
   const access = findAuthorizedDraft(draftId, user, ["creator"]);
   if (access.error) return access.error;
 
@@ -318,7 +318,7 @@ function handoverToManager(draftId, body, user) {
   };
 }
 
-function dismissFinding(draftId, findingId, body, user) {
+async function dismissFinding(draftId, findingId, body, user) {
   const access = findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
   if (access.error) return access.error;
 
@@ -395,7 +395,7 @@ async function approveDraft(draftId, body, user) {
   const draft = access.draft;
 
   // Prevent generating multiple approval badges for the same draft.
-  const existingBadge = db.get(
+  const existingBadge = await db.get(
     "SELECT * FROM approval_badges WHERE draft_id = ? LIMIT 1",
     [draftId]
   );
@@ -448,7 +448,7 @@ async function approveDraft(draftId, body, user) {
   };
 }
 
-function requestChanges(draftId, body, user) {
+async function requestChanges(draftId, body, user) {
   const access = findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
   if (access.error) return access.error;
 
@@ -475,7 +475,7 @@ function requestChanges(draftId, body, user) {
   };
 }
 
-function decideDraft(draftId, body, user) {
+async function decideDraft(draftId, body, user) {
   const action = String(body?.action || "").trim().toLowerCase();
   const note = typeof body?.note === "string" ? body.note.trim() : "";
 
