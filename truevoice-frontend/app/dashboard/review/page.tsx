@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/SessionContext";
 import { ProofOfApprovalBadge } from "@/components/ProofOfApprovalBadge";
 
 type Draft = {
@@ -25,6 +26,8 @@ type DraftFinding = {
   reason?: string;
   rule_ref?: string;
   source_id?: string;
+  status?: string;
+  dismiss_reason?: string | null;
   creator_explanation?: string | null;
 };
 
@@ -86,7 +89,6 @@ function stageIndex(
   history: HistoryItem[] = []
 ): number {
   const s = status.toLowerCase();
-
   if (s.includes("approv") || hasBadge) return 2;
 
   const hasApprovedHistory = history.some((h) =>
@@ -103,11 +105,13 @@ function stageIndex(
   ) {
     return 1;
   }
-
   return 0;
 }
 
 export default function ReviewPage() {
+  const { user } = useSession();
+  const isCreator = user.role.toLowerCase() === "creator";
+
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>("ALL");
@@ -117,6 +121,10 @@ export default function ReviewPage() {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [decisionMsg, setDecisionMsg] = useState<string | null>(null);
+  const [openDismissId, setOpenDismissId] = useState<string | null>(null);
+  const [dismissReasons, setDismissReasons] = useState<Record<string, string>>({});
+  const [dismissErrors, setDismissErrors] = useState<Record<string, string>>({});
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +169,8 @@ export default function ReviewPage() {
     let cancelled = false;
     setDetailLoading(true);
     setDecisionMsg(null);
+    setOpenDismissId(null);
+    setDismissErrors({});
     api<DraftDetail>(`/drafts/${activeDraftId}`)
       .then((res) => {
         if (!cancelled) setDetail(res);
@@ -175,6 +185,38 @@ export default function ReviewPage() {
       cancelled = true;
     };
   }, [activeDraftId]);
+
+  async function dismissFinding(findingId: string) {
+    if (!selected) return;
+    const reason = (dismissReasons[findingId] || comment).trim();
+    if (!reason) {
+      setDismissErrors((prev) => ({
+        ...prev,
+        [findingId]: "Please type a reason in the box above first.",
+      }));
+      return;
+    }
+    setDismissingId(findingId);
+    setDismissErrors((prev) => ({ ...prev, [findingId]: "" }));
+    setDecisionMsg(null);
+    try {
+      await api(`/drafts/${selected.id}/findings/${findingId}/dismiss`, {
+        method: "POST",
+        body: { reason },
+      });
+      setOpenDismissId(null);
+      setDismissReasons((prev) => ({ ...prev, [findingId]: "" }));
+      const refreshed = await api<DraftDetail>(`/drafts/${selected.id}`);
+      setDetail(refreshed);
+      setDecisionMsg("✓ Finding dismissed with reason recorded (Health Score updated).");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not dismiss finding.";
+      setDismissErrors((prev) => ({ ...prev, [findingId]: msg }));
+      setDecisionMsg(msg);
+    } finally {
+      setDismissingId(null);
+    }
+  }
 
   async function recordDecision(action: "approved" | "changes_requested") {
     if (!selected) return;
@@ -252,6 +294,17 @@ export default function ReviewPage() {
           })}
         </div>
       </div>
+
+      {isCreator && (
+        <div
+          role="alert"
+          className="rounded-xl border border-[#9b1c13]/30 bg-[#f9ddd9]/60 px-4 py-3 text-xs font-medium text-[#9b1c13]"
+        >
+          You are logged in as a <strong>Creator</strong> ({user.email}). Log out and sign in as a{" "}
+          <strong>Reviewer</strong> (<code>riddhi@glowvale.demo</code> / <code>reviewer123</code>) to
+          dismiss findings, approve drafts, or request changes.
+        </div>
+      )}
 
       {drafts === null && <p className="text-[var(--tv-muted)]">Loading drafts…</p>}
       {error && (
@@ -367,25 +420,96 @@ export default function ReviewPage() {
                       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tv-muted)]">
                         Findings ({detail.findings.length})
                       </p>
-                      {detail.findings.map((f) => (
-                        <div key={f.id} className="rounded-xl border border-[var(--tv-line)] p-3 text-xs">
-                          <span className="font-bold text-[var(--tv-flag)]">
-                            {f.severity ?? "FLAG"}
-                          </span>{" "}
-                          {f.flagged_text && <strong>&ldquo;{f.flagged_text}&rdquo;</strong>}
-                          <p className="mt-1 text-[var(--tv-ink)]">{f.reason}</p>
-                          {(f.rule_ref || f.source_id) && (
-                            <p className="mt-1 text-[var(--tv-muted)]">
-                              {f.rule_ref} {f.source_id ? `· Source ${f.source_id}` : ""}
-                            </p>
-                          )}
-                          {f.creator_explanation && (
-                            <p className="mt-2 rounded-lg bg-[#f6e7c8]/60 px-2.5 py-1.5 text-[#7a4b00]">
-                              <strong>Creator context:</strong> {f.creator_explanation}
-                            </p>
-                          )}
-                        </div>
-                      ))}
+                      {detail.findings.map((f) => {
+                        const isDismissed = (f.status ?? "").toLowerCase() === "dismissed";
+                        const isOpen = openDismissId === f.id;
+                        const errText = dismissErrors[f.id];
+                        return (
+                          <div
+                            key={f.id}
+                            className={`rounded-xl border p-3 text-xs ${
+                              isDismissed
+                                ? "border-[#1f6b3a]/30 bg-[#ddebdd]/25"
+                                : "border-[var(--tv-line)]"
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <span
+                                  className={`font-bold ${
+                                    isDismissed ? "text-[#1f6b3a]" : "text-[var(--tv-flag)]"
+                                  }`}
+                                >
+                                  {isDismissed ? "DISMISSED" : f.severity ?? "FLAG"}
+                                </span>{" "}
+                                {f.flagged_text && <strong>&ldquo;{f.flagged_text}&rdquo;</strong>}
+                              </div>
+
+                              {!isDismissed && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenDismissId(isOpen ? null : f.id);
+                                    setDismissErrors((prev) => ({ ...prev, [f.id]: "" }));
+                                  }}
+                                  className="rounded-lg border border-[var(--tv-line)] bg-white px-2.5 py-1 text-[11px] font-semibold text-[var(--tv-ink)] transition hover:bg-[var(--tv-paper)]"
+                                >
+                                  {isOpen ? "Cancel" : "Dismiss"}
+                                </button>
+                              )}
+                            </div>
+
+                            <p className="mt-1 text-[var(--tv-ink)]">{f.reason}</p>
+                            {(f.rule_ref || f.source_id) && (
+                              <p className="mt-1 text-[var(--tv-muted)]">
+                                {f.rule_ref} {f.source_id ? `· Source ${f.source_id}` : ""}
+                              </p>
+                            )}
+                            {f.creator_explanation && (
+                              <p className="mt-2 rounded-lg bg-[#f6e7c8]/60 px-2.5 py-1.5 text-[#7a4b00]">
+                                <strong>Creator context:</strong> {f.creator_explanation}
+                              </p>
+                            )}
+                            {isDismissed && f.dismiss_reason && (
+                              <p className="mt-2 rounded-lg bg-[#ddebdd]/60 px-2.5 py-1.5 text-[#1f6b3a]">
+                                <strong>Dismissal reason:</strong> {f.dismiss_reason}
+                              </p>
+                            )}
+
+                            {isOpen && !isDismissed && (
+                              <div className="mt-2.5 space-y-2 rounded-lg bg-[var(--tv-paper)] p-2.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={dismissReasons[f.id] ?? ""}
+                                    onChange={(e) =>
+                                      setDismissReasons((prev) => ({
+                                        ...prev,
+                                        [f.id]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="Why is this finding okay? (e.g. Approved campaign exception)"
+                                    className="min-w-[200px] flex-1 rounded-lg border border-[var(--tv-line)] bg-white px-2.5 py-1.5 text-xs outline-none focus:border-[var(--tv-brand)]"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={dismissingId === f.id}
+                                    onClick={() => dismissFinding(f.id)}
+                                    className="rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] disabled:opacity-60"
+                                  >
+                                    {dismissingId === f.id ? "Dismissing…" : "Confirm dismiss"}
+                                  </button>
+                                </div>
+                                {errText && (
+                                  <p role="alert" className="font-semibold text-[#9b1c13]">
+                                    {errText}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -403,7 +527,6 @@ export default function ReviewPage() {
                           const when = h.timestamp ?? h.created_at;
                           const isChangeReq = action === "CHANGES_REQUESTED";
                           const isApproved = action === "APPROVED";
-
                           return (
                             <li
                               key={h.id ?? `${action}-${i}`}
