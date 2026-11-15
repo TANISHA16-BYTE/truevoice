@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS facts (
   fact_key TEXT NOT NULL,
   fact_value TEXT NOT NULL,
   source_id TEXT REFERENCES sources(source_id),
-  verified_date DATE
+  verified_date DATE,
+  owner TEXT,
+  status TEXT NOT NULL DEFAULT 'active'
 );
 
 CREATE TABLE IF NOT EXISTS prices (
@@ -36,7 +38,10 @@ CREATE TABLE IF NOT EXISTS prices (
   current_price_inr INT NOT NULL,
   old_price_inr INT,
   effective_date DATE NOT NULL,
-  source_id TEXT REFERENCES sources(source_id)
+  source_id TEXT REFERENCES sources(source_id),
+  owner TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
+  last_checked TEXT
 );
 
 CREATE TABLE IF NOT EXISTS offers (
@@ -48,7 +53,10 @@ CREATE TABLE IF NOT EXISTS offers (
   valid_from DATE NOT NULL,
   valid_to DATE NOT NULL,
   max_discount_inr INT,
-  status TEXT NOT NULL
+  status TEXT NOT NULL,
+  owner TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
+  last_checked TEXT
 );
 
 CREATE TABLE IF NOT EXISTS claims (
@@ -59,7 +67,10 @@ CREATE TABLE IF NOT EXISTS claims (
   required_evidence TEXT,
   source_id TEXT,
   rule_ref TEXT,
-  safe_alternative TEXT
+  safe_alternative TEXT,
+  owner TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
+  last_checked TEXT
 );
 
 CREATE TABLE IF NOT EXISTS terms (
@@ -68,7 +79,10 @@ CREATE TABLE IF NOT EXISTS terms (
   category TEXT NOT NULL,
   replacement TEXT NOT NULL,
   reason TEXT NOT NULL,
-  rule_ref TEXT NOT NULL
+  rule_ref TEXT NOT NULL,
+  owner TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
+  last_checked TEXT
 );
 
 CREATE TABLE IF NOT EXISTS rules (
@@ -178,3 +192,12 @@ CREATE TABLE IF NOT EXISTS draft_history (
   details TEXT,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+-- Query indexes used by the API. Safe to re-run.
+CREATE INDEX IF NOT EXISTS idx_drafts_creator ON drafts(creator_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_findings_draft ON findings(draft_id, status);
+CREATE INDEX IF NOT EXISTS idx_history_draft ON draft_history(draft_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status);
+CREATE INDEX IF NOT EXISTS idx_facts_product_status ON facts(product_code, status);
+CREATE INDEX IF NOT EXISTS idx_ai_mistakes_phrase_region ON ai_mistakes(LOWER(phrase), region);
