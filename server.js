@@ -66,7 +66,7 @@ const server = http.createServer(async (req, res) => {
   // Extract auth user
   const authHeader = req.headers["authorization"] || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const currentUser = token ? getUserFromToken(token) : null;
+  const currentUser = token ? await getUserFromToken(token) : null;
 
   const body = ["POST", "PUT", "PATCH"].includes(method) ? await parseBody(req) : {};
 
@@ -136,11 +136,11 @@ const server = http.createServer(async (req, res) => {
     // Auth Routes
     // ----------------------------------------------------
     if (pathname === "/api/auth/signup" && method === "POST") {
-      const resp = authCtrl.signup(body);
+      const resp = await authCtrl.signup(body);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/auth/login" && method === "POST") {
-      const resp = authCtrl.login(body);
+      const resp = await authCtrl.login(body);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/auth/me" && method === "GET") {
@@ -203,20 +203,20 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/drafts" && method === "GET") {
-      const resp = draftsCtrl.listDrafts(query, currentUser);
+      const resp = await draftsCtrl.listDrafts(query, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
     // Draft specific subroutes: /api/drafts/:id/...
     const draftDetailMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)$/);
     if (draftDetailMatch && method === "GET") {
-      const resp = draftsCtrl.getDraftDetails(draftDetailMatch[1], currentUser);
+      const resp = await draftsCtrl.getDraftDetails(draftDetailMatch[1], currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
     const explainMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/findings\/([A-Za-z0-9_]+)\/explain$/);
     if (explainMatch && method === "POST") {
-      const resp = draftsCtrl.explainFinding(explainMatch[1], explainMatch[2], body, currentUser);
+      const resp = await draftsCtrl.explainFinding(explainMatch[1], explainMatch[2], body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
@@ -228,31 +228,31 @@ const server = http.createServer(async (req, res) => {
 
     const dismissMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/findings\/([A-Za-z0-9_]+)\/dismiss$/);
     if (dismissMatch && method === "POST") {
-      const resp = draftsCtrl.dismissFinding(dismissMatch[1], dismissMatch[2], body, currentUser);
+      const resp = await draftsCtrl.dismissFinding(dismissMatch[1], dismissMatch[2], body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
     const handoverMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/handover$/);
     if (handoverMatch && method === "POST") {
-      const resp = draftsCtrl.handoverToManager(handoverMatch[1], body, currentUser);
+      const resp = await draftsCtrl.handoverToManager(handoverMatch[1], body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
     const decisionMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/decision$/);
     if (decisionMatch && method === "POST") {
-      const resp = draftsCtrl.decideDraft(decisionMatch[1], body, currentUser);
+      const resp = await draftsCtrl.decideDraft(decisionMatch[1], body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
     const approveMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/approve$/);
     if (approveMatch && method === "POST") {
-      const resp = draftsCtrl.approveDraft(approveMatch[1], body, currentUser);
+      const resp = await draftsCtrl.approveDraft(approveMatch[1], body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
     const changeRequestMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/request-changes$/);
     if (changeRequestMatch && method === "POST") {
-      const resp = draftsCtrl.requestChanges(changeRequestMatch[1], body, currentUser);
+      const resp = await draftsCtrl.requestChanges(changeRequestMatch[1], body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
@@ -260,62 +260,62 @@ const server = http.createServer(async (req, res) => {
     // Knowledge Base Library Routes
     // ----------------------------------------------------
     if (pathname === "/api/library" && method === "GET") {
-      const resp = libraryCtrl.getUnifiedLibrary();
+      const resp = await libraryCtrl.getUnifiedLibrary();
       return sendJson(res, resp.status, resp.data);
     }
     const patchLibraryMatch = pathname.match(/^\/api\/library\/([^/]+)$/);
     if (patchLibraryMatch && method === "PATCH") {
-      const resp = libraryCtrl.patchLibraryItem(patchLibraryMatch[1], body, currentUser);
+      const resp = await libraryCtrl.patchLibraryItem(patchLibraryMatch[1], body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
 
     if (pathname === "/api/library/sources" && method === "GET") {
-      const resp = libraryCtrl.getSources();
+      const resp = await libraryCtrl.getSources();
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/facts" && method === "GET") {
-      const resp = libraryCtrl.getFacts(query);
+      const resp = await libraryCtrl.getFacts(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/facts" && method === "POST") {
-      const resp = libraryCtrl.createFact(body, currentUser);
+      const resp = await libraryCtrl.createFact(body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
     const factMatch = pathname.match(/^\/api\/library\/facts\/([A-Za-z0-9_-]+)$/);
     if (factMatch && method === "PUT") {
-      const resp = libraryCtrl.updateFact(factMatch[1], body, currentUser);
+      const resp = await libraryCtrl.updateFact(factMatch[1], body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
     if (factMatch && method === "DELETE") {
-      const resp = libraryCtrl.archiveFact(factMatch[1], currentUser);
+      const resp = await libraryCtrl.archiveFact(factMatch[1], currentUser);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/prices" && method === "GET") {
-      const resp = libraryCtrl.getPrices(query);
+      const resp = await libraryCtrl.getPrices(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/offers" && method === "GET") {
-      const resp = libraryCtrl.getOffers(query);
+      const resp = await libraryCtrl.getOffers(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/claims" && method === "GET") {
-      const resp = libraryCtrl.getClaims(query);
+      const resp = await libraryCtrl.getClaims(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/terms" && method === "GET") {
-      const resp = libraryCtrl.getTerms(query);
+      const resp = await libraryCtrl.getTerms(query);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/rules" && method === "GET") {
-      const resp = libraryCtrl.getRules();
+      const resp = await libraryCtrl.getRules();
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/protected-names" && method === "GET") {
-      const resp = libraryCtrl.getProtectedNames();
+      const resp = await libraryCtrl.getProtectedNames();
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/library/regional-notes" && method === "GET") {
-      const resp = libraryCtrl.getRegionalNotes();
+      const resp = await libraryCtrl.getRegionalNotes();
       return sendJson(res, resp.status, resp.data);
     }
     const libraryItemMatch = pathname.match(/^\/api\/library\/(prices|offers|claims|terms)(?:\/([A-Za-z0-9_-]+))?$/);
@@ -323,15 +323,15 @@ const server = http.createServer(async (req, res) => {
       const kind = libraryItemMatch[1];
       const itemId = libraryItemMatch[2];
       if (!itemId && method === "POST") {
-        const resp = libraryCtrl.createItem(kind, body, currentUser);
+        const resp = await libraryCtrl.createItem(kind, body, currentUser);
         return sendJson(res, resp.status, resp.data);
       }
       if (itemId && method === "PUT") {
-        const resp = libraryCtrl.updateItem(kind, itemId, body, currentUser);
+        const resp = await libraryCtrl.updateItem(kind, itemId, body, currentUser);
         return sendJson(res, resp.status, resp.data);
       }
       if (itemId && method === "DELETE") {
-        const resp = libraryCtrl.archiveItem(kind, itemId, currentUser);
+        const resp = await libraryCtrl.archiveItem(kind, itemId, currentUser);
         return sendJson(res, resp.status, resp.data);
       }
     }
@@ -340,7 +340,7 @@ const server = http.createServer(async (req, res) => {
     // Cross-Channel Scheduled Posts
     // ----------------------------------------------------
     if (pathname === "/api/clash/posts" && method === "GET") {
-      const posts = listScheduledPosts();
+      const posts = await listScheduledPosts();
       return sendJson(res, 200, { scheduled_posts: posts });
     }
 
@@ -361,11 +361,11 @@ const server = http.createServer(async (req, res) => {
 
     const verifyMatch = pathname.match(/^\/api\/verify\/([A-Za-z0-9_-]+)$/) || pathname.match(/^\/verify\/([A-Za-z0-9_-]+)$/);
     if (verifyMatch && method === "GET") {
-      const resp = badgeCtrl.getBadgeVerification(verifyMatch[1]);
+      const resp = await badgeCtrl.getBadgeVerification(verifyMatch[1]);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/verify" && method === "POST") {
-      const resp = badgeCtrl.verifyContentIntegrity(body);
+      const resp = await badgeCtrl.verifyContentIntegrity(body);
       return sendJson(res, resp.status, resp.data);
     }
 
@@ -373,7 +373,7 @@ const server = http.createServer(async (req, res) => {
     // Guideline Health Score
     // ----------------------------------------------------
     if ((pathname === "/api/health-score" || pathname === "/api/analytics/guideline-health") && method === "GET") {
-      const resp = healthCtrl.getGuidelineHealth();
+      const resp = await healthCtrl.getGuidelineHealth();
       return sendJson(res, resp.status, resp.data);
     }
 
@@ -381,11 +381,11 @@ const server = http.createServer(async (req, res) => {
     // "Report AI Mistake" Learning Loop
     // ----------------------------------------------------
     if (pathname === "/api/ai-mistakes" && method === "POST") {
-      const resp = mistakesCtrl.submitAiMistake(body, currentUser);
+      const resp = await mistakesCtrl.submitAiMistake(body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
     if (pathname === "/api/ai-mistakes" && method === "GET") {
-      const resp = mistakesCtrl.getMistakes();
+      const resp = await mistakesCtrl.getMistakes();
       return sendJson(res, resp.status, resp.data);
     }
 
@@ -393,7 +393,7 @@ const server = http.createServer(async (req, res) => {
     // Audit Trail Export
     // ----------------------------------------------------
     if (pathname === "/api/audit-logs/export" && method === "GET") {
-      const resp = auditCtrl.exportAuditLogs(query);
+      const resp = await auditCtrl.exportAuditLogs(query);
       if (resp.contentType === "text/csv") {
         res.writeHead(200, {
           "Content-Type": "text/csv",
