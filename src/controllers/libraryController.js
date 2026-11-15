@@ -168,7 +168,7 @@ const KINDS = {
       effective_date: { type: "date", required: false, default: today },
       source_id: { type: "source", required: true }
     },
-    async async check(values, selfId) {
+    async check(values, selfId) {
       const clash = await db.get(
         "SELECT price_id FROM prices WHERE product_code = ? AND archived = 0 AND price_id != ?",
         [values.product_code, selfId]
