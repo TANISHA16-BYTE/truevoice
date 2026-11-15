@@ -21,7 +21,7 @@ async function createApprovalBadge({ draftId, content, approvedBy, reviewerName 
   const id = "badge_" + Date.now();
 
   await db.run(
-    "INSERT INTO approval_badges (id, draft_id, badge_code, content_hash, approved_by, reviewer_name, approved_at, public_url, is_revoked, snapshot_content, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+    "INSERT INTO approval_badges (id, draft_id, badge_code, content_hash, approved_by, reviewer_name, approved_at, public_url, is_revoked, snapshot_content, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)",
     [
       id,
       draftId,
@@ -57,7 +57,7 @@ async function verifyBadgeAndContent(badgeCode, submittedContent = null) {
     };
   }
 
-  if (badge.is_revoked === 1) {
+  if (badge.is_revoked === 1 || badge.is_revoked === true) {
     return {
       found: true,
       is_revoked: true,
