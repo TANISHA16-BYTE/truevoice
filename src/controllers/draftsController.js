@@ -158,7 +158,7 @@ async function listDrafts(query = {}, user) {
   sql += " ORDER BY CASE risk_level WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END ASC, created_at DESC";
 
   const drafts = await db.query(sql, params);
-  const results = drafts.map(d => {
+  const results = await Promise.all(drafts.map(async d => {
     const findingsCount = await db.get(
       "SELECT COUNT(*) as count FROM findings WHERE draft_id = ?", [d.id]
     )?.count || 0;
@@ -171,7 +171,7 @@ async function listDrafts(query = {}, user) {
       total_findings: findingsCount,
       high_severity_findings: highCount
     };
-  });
+  }));
 
   return { status: 200, data: { drafts: results } };
 }
