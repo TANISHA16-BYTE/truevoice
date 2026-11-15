@@ -76,7 +76,7 @@ async function createFact(body, user) {
   if (!sourceId) {
     return { status: 400, data: { error: "source_id is required. No source, no fact." } };
   }
-  if (!(await sourceExists(sourceId)))) {
+  if (!(await sourceExists(sourceId))) {
     return { status: 400, data: { error: "Unknown source_id: " + sourceId } };
   }
 
@@ -122,7 +122,7 @@ async function updateFact(factId, body, user) {
     }
   }
 
-  if (!next.source_id || !(await sourceExists(next.source_id)))) {
+  if (!next.source_id || !(await sourceExists(next.source_id))) {
     return { status: 400, data: { error: "Unknown source_id: " + next.source_id } };
   }
 
