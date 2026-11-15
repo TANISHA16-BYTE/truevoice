@@ -388,7 +388,7 @@ async function acceptFindingFix(draftId, findingId, body, user) {
   };
 }
 
-function approveDraft(draftId, body, user) {
+async function approveDraft(draftId, body, user) {
   const access = findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
   if (access.error) return access.error;
 
