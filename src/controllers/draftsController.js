@@ -159,12 +159,14 @@ async function listDrafts(query = {}, user) {
 
   const drafts = await db.query(sql, params);
   const results = await Promise.all(drafts.map(async d => {
-    const findingsCount = await db.get(
+    const findingsCountRow = await db.get(
       "SELECT COUNT(*) as count FROM findings WHERE draft_id = ?", [d.id]
-    )?.count || 0;
-    const highCount = await db.get(
+    );
+    const highCountRow = await db.get(
       "SELECT COUNT(*) as count FROM findings WHERE draft_id = ? AND severity = 'HIGH'", [d.id]
-    )?.count || 0;
+    );
+    const findingsCount = Number(findingsCountRow?.count || 0);
+    const highCount = Number(highCountRow?.count || 0);
 
     return {
       ...d,
