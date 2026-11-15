@@ -19,6 +19,8 @@ const config = {
   HOST: process.env.HOST || "0.0.0.0",
   DATABASE_PATH: process.env.DATABASE_PATH ||
     path.join(process.cwd(), "truevoice.db"),
+  DATABASE_URL: process.env.DATABASE_URL || "",
+  DATABASE_SSL: process.env.DATABASE_SSL !== "false",
 
   JWT_SECRET: process.env.JWT_SECRET || developmentSecret,
 
