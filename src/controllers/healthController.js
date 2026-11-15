@@ -1,8 +1,8 @@
 // Guideline Health Controller
 const { calculateGuidelineHealth } = require("../services/guidelineHealthService");
 
-function getGuidelineHealth() {
-  const healthData = calculateGuidelineHealth();
+async function getGuidelineHealth() {
+  const healthData = await calculateGuidelineHealth();
   return { status: 200, data: healthData };
 }
 
