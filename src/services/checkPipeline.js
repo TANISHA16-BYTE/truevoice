@@ -20,19 +20,19 @@ async function runCheckPipeline(payload) {
   const allFindings = [];
 
   // 1. Exact-match rules (Pricing, Claims, Offers, Terms, Tone 1.3)
-  const exactFindings = checkExactRules(text, { product_code, channel });
+  const exactFindings = await checkExactRules(text, { product_code, channel });
   allFindings.push(...exactFindings);
 
   // 2. Trademark Shield ("check, don't judge")
-  const trademarkFindings = checkTrademarks(text);
+  const trademarkFindings = await checkTrademarks(text);
   allFindings.push(...trademarkFindings);
 
   // 3. Regional Nuance Guard (Slang, vernacular notes + learned mistake overrides)
-  const regionalFindings = checkRegionalNuances(text);
+  const regionalFindings = await checkRegionalNuances(text);
   allFindings.push(...regionalFindings);
 
   // 4. Cross-Channel Schedule Clash Check
-  const clashFindings = checkScheduleClashes({
+  const clashFindings = await checkScheduleClashes({
     content: text,
     channel,
     scheduled_for,
@@ -49,7 +49,7 @@ async function runCheckPipeline(payload) {
   }
 
   // 6. Stale Source Check: check if any cited source in findings is stale
-  const staleSources = checkStaleSources();
+  const staleSources = await checkStaleSources();
   const staleMap = new Map(staleSources.filter(s => s.is_stale).map(s => [s.source_id, s]));
 
   for (const f of allFindings) {
