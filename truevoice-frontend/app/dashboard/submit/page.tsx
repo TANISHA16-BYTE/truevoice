@@ -38,6 +38,16 @@ type CreateDraftResponse = {
   findings?: Finding[];
 };
 
+type UploadResponse = {
+  filename?: string;
+  file_type?: string;
+  extracted_length?: number;
+  extracted_content?: string;
+  visual_summary?: string | null;
+  visual_findings_count?: number;
+  check_result?: CheckResult;
+};
+
 const EXAMPLE =
   "Our serum is clinically proven to remove wrinkles in 3 days. Launching Friday 20 Nov with flat 30% off!";
 
@@ -71,6 +81,7 @@ const severityRank: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
 function typeLabel(type = ""): string {
   if (/unverified/i.test(type)) return "Unverified, needs source";
+  if (/visual/i.test(type)) return "Visual / Logo check";
   const words = type.replace(/_/g, " ").trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Finding";
 }
@@ -93,6 +104,10 @@ export default function SubmitPage() {
   const [checkedText, setCheckedText] = useState("");
   const [result, setResult] = useState<CheckResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [visualSummary, setVisualSummary] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -115,14 +130,14 @@ export default function SubmitPage() {
   const [mistakeSavingId, setMistakeSavingId] = useState<string | null>(null);
   const [mistakeStatus, setMistakeStatus] = useState<Record<string, string>>({});
 
-  // Advance the 3-step pipeline animation while /check is running.
+  // Advance the 3-step pipeline animation while /check or /upload is running.
   useEffect(() => {
-    if (!loading) return;
+    if (!loading && !uploadingFile) return;
     const timer = setInterval(() => {
       setActiveStep((s) => Math.min(s + 1, 2));
     }, 450);
     return () => clearInterval(timer);
-  }, [loading]);
+  }, [loading, uploadingFile]);
 
   async function handleCheck() {
     if (!text.trim()) {
@@ -155,6 +170,9 @@ export default function SubmitPage() {
     setCheckedText("");
     setResult(null);
     setSavedDraftId(null);
+    setUploadedImagePreview(null);
+    setUploadedFileName(null);
+    setVisualSummary(null);
     setError(null);
     setNotice(null);
     setOpenWhyId(null);
@@ -168,19 +186,98 @@ export default function SubmitPage() {
     e.target.value = "";
     if (!file) return;
 
-    const ok = /\.(txt|md)$/i.test(file.name) || file.type.startsWith("text/");
-    if (!ok) {
-      setError("Only .txt and .md files are supported in this round. Images and PDFs come later.");
+    const allowedExt = /\.(txt|md|markdown|csv|tsv|json|html|htm|xml|yml|yaml|rtf|docx|pptx|pdf|png|jpe?g|webp|gif)$/i;
+    const isPlainText =
+      /\.(txt|md|markdown)$/i.test(file.name) ||
+      file.type === "text/plain" ||
+      file.type === "text/markdown";
+    const isImage =
+      /\.(png|jpe?g|webp|gif)$/i.test(file.name) || file.type.startsWith("image/");
+
+    if (!allowedExt.test(file.name) && !isPlainText && !isImage) {
+      setError(
+        "Unsupported file type. Upload .txt, .md, .docx, .pptx, .pdf, or an ad image (.png, .jpg, .webp)."
+      );
       return;
     }
 
-    const content = await file.text();
-    if (!draftTitle.trim()) setDraftTitle(file.name);
-    setText(content);
-    setResult(null);
-    setSavedDraftId(null);
+    if (file.size > 3 * 1024 * 1024) {
+      setError("File is too large (max 3 MB). Please upload a smaller document or compressed image.");
+      return;
+    }
+
     setError(null);
-    setNotice(`Loaded "${file.name}". Click Check draft to scan it.`);
+    setNotice(null);
+    setSavedDraftId(null);
+    setHandedIds({});
+    setOpenReportId(null);
+    setMistakeStatus({});
+
+    if (isPlainText) {
+      const content = await file.text();
+      if (!draftTitle.trim()) setDraftTitle(file.name);
+      setUploadedImagePreview(null);
+      setUploadedFileName(file.name);
+      setVisualSummary(null);
+      setText(content);
+      setResult(null);
+      setNotice(`Loaded "${file.name}". Click Check draft to scan it.`);
+      return;
+    }
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read the selected file."));
+      reader.readAsDataURL(file);
+    }).catch((err) => {
+      setError(err instanceof Error ? err.message : "Could not read file.");
+      return "";
+    });
+
+    if (!dataUrl) return;
+
+    setUploadingFile(true);
+    setActiveStep(0);
+    setUploadedFileName(file.name);
+    setUploadedImagePreview(isImage ? dataUrl : null);
+    setVisualSummary(null);
+
+    try {
+      const res = await api<UploadResponse>("/upload", {
+        method: "POST",
+        body: {
+          filename: file.name,
+          file_base64: dataUrl,
+          channel,
+        },
+      });
+      const extracted = res.extracted_content ?? "";
+      if (!draftTitle.trim()) setDraftTitle(file.name);
+      setText(extracted);
+      setCheckedText(extracted);
+      setVisualSummary(res.visual_summary ?? null);
+      if (res.check_result) {
+        setResult(res.check_result);
+      } else {
+        setResult(null);
+      }
+      const visCount = res.visual_findings_count ?? 0;
+      setNotice(
+        isImage
+          ? `Scanned "${file.name}" (${extracted.length} chars extracted${visCount > 0 ? `, ${visCount} visual/logo check${visCount === 1 ? "" : "s"}` : ""}).`
+          : `Extracted & scanned "${file.name}" (${extracted.length} characters).`
+      );
+    } catch (err) {
+      setResult(null);
+      setError(
+        err instanceof Error
+          ? err.message
+          : `Could not extract or check "${file.name}".`
+      );
+    } finally {
+      setUploadingFile(false);
+    }
   }
 
   async function submitDraftToQueue(): Promise<{ id: string; findings: Finding[] } | null> {
@@ -228,12 +325,10 @@ export default function SubmitPage() {
     try {
       const saved = await submitDraftToQueue();
       if (!saved) return;
-
       const matchedFinding =
         saved.findings.find(
           (sf) => sf.id === f.id || (f.flagged_text && sf.flagged_text === f.flagged_text)
         ) ?? saved.findings[idx];
-
       await api(`/drafts/${saved.id}/handover`, {
         method: "POST",
         body: {
@@ -267,7 +362,6 @@ export default function SubmitPage() {
     const region = mistakeForm.region.trim().slice(0, 60);
     const incorrectFlag = (f.reason || f.type || "").trim().slice(0, 200);
     const userCorrection = mistakeForm.user_correction.trim().slice(0, 300);
-
     if (!phrase || !userCorrection) {
       setMistakeStatus((prev) => ({
         ...prev,
@@ -275,7 +369,6 @@ export default function SubmitPage() {
       }));
       return;
     }
-
     setMistakeSavingId(f.id);
     try {
       const res = await api<{ mistake?: { updated_existing?: boolean } }>("/ai-mistakes", {
@@ -344,7 +437,8 @@ export default function SubmitPage() {
   );
   const risk = (result?.risk_level ?? "").toUpperCase();
   const outOfDate = result !== null && text !== checkedText;
-  const pipelineStep = loading ? activeStep : result ? 3 : -1;
+  const busy = loading || uploadingFile;
+  const pipelineStep = busy ? activeStep : result ? 3 : -1;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -435,7 +529,7 @@ export default function SubmitPage() {
             Your draft
           </label>
           <div className="relative mt-2 overflow-hidden rounded-xl border border-[var(--tv-edge)] bg-white shadow-xs transition focus-within:border-[var(--tv-brand)] focus-within:ring-2 focus-within:ring-[var(--tv-brand)]/15">
-            {loading && (
+            {busy && (
               <div
                 aria-hidden="true"
                 className="animate-scan-sweep pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-[var(--tv-champagne)]/45 to-transparent"
@@ -456,7 +550,7 @@ export default function SubmitPage() {
           <button
             type="button"
             onClick={handleCheck}
-            disabled={loading}
+            disabled={busy}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--tv-brand)] px-6 py-2.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--tv-brand-ink)] active:scale-95 disabled:opacity-60 sm:w-auto"
           >
             {loading && (
@@ -466,38 +560,70 @@ export default function SubmitPage() {
           </button>
           <button
             type="button"
+            disabled={busy}
             onClick={() => {
               if (!draftTitle.trim()) setDraftTitle("Winter Serum Launch");
+              setUploadedImagePreview(null);
+              setUploadedFileName(null);
+              setVisualSummary(null);
               setText(EXAMPLE);
               setSavedDraftId(null);
               setNotice(null);
             }}
-            className="w-full rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95 sm:w-auto"
+            className="w-full rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95 disabled:opacity-60 sm:w-auto"
           >
             Use example draft
           </button>
-          <label className="w-full cursor-pointer rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-center text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95 sm:w-auto">
-            Attach .txt / .md
+          <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-center text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95 sm:w-auto">
+            {uploadingFile && (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--tv-brand)]/30 border-t-[var(--tv-brand)]" />
+            )}
+            <span>{uploadingFile ? "Scanning file…" : "Upload file / ad image"}</span>
             <input
               type="file"
-              accept=".txt,.md,text/plain,text/markdown"
+              disabled={busy}
+              accept=".txt,.md,.csv,.json,.html,.rtf,.docx,.pptx,.pdf,.png,.jpg,.jpeg,.webp,.gif"
               onChange={handleFileUpload}
               className="sr-only"
             />
           </label>
           <button
             type="button"
+            disabled={busy}
             onClick={handleClear}
-            className="w-full rounded-xl border border-[var(--tv-edge)] px-4 py-2.5 text-sm font-medium transition hover:bg-white active:scale-95 sm:w-auto"
+            className="w-full rounded-xl border border-[var(--tv-edge)] px-4 py-2.5 text-sm font-medium transition hover:bg-white active:scale-95 disabled:opacity-60 sm:w-auto"
           >
             Clear
           </button>
         </div>
         <p className="text-xs text-[var(--tv-muted)]">
-          Supported formats: pasted text, <code>.txt</code>, and <code>.md</code>. Image, logo, and
-          PDF checks are planned for a later stage.
+          Supported formats: pasted text, <code>.txt</code>, <code>.md</code>, <code>.docx</code>,{" "}
+          <code>.pptx</code>, <code>.pdf</code>, and ad images (<code>.png</code>, <code>.jpg</code>,{" "}
+          <code>.webp</code>) with visual &amp; logo checks (max 3 MB).
         </p>
       </div>
+
+      {(uploadedImagePreview || visualSummary) && (
+        <div className="animate-pop-in flex flex-col gap-4 rounded-2xl border border-[var(--tv-line)] bg-white p-4 shadow-xs sm:flex-row sm:items-center">
+          {uploadedImagePreview && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={uploadedImagePreview}
+              alt={uploadedFileName ?? "Uploaded ad creative"}
+              className="h-28 w-full shrink-0 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] object-contain sm:w-36"
+            />
+          )}
+          <div className="min-w-0 space-y-1 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-brand)]">
+              Visual &amp; Logo Inspection {uploadedFileName ? `· ${uploadedFileName}` : ""}
+            </p>
+            <p className="text-[var(--tv-ink)]">
+              {visualSummary ||
+                "Image text extracted and checked against Glowvale brand guidelines, seals, and logo rules."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="animate-pop-in font-medium text-[var(--tv-flag)]">
@@ -545,6 +671,7 @@ export default function SubmitPage() {
                   {severityLabel[risk] ?? (risk || "Unknown")}
                 </span>
               </div>
+
               <div className="text-sm">
                 <p className="font-semibold">
                   {result.findings_count ?? findings.length}{" "}
