@@ -1,7 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowRight,
+  Briefcase,
+  Check,
+  ChevronDown,
+  FileText,
+  Flag,
+  Loader2,
+  Mail,
+  Monitor,
+  Share2,
+  Sparkles,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/SessionContext";
 
@@ -48,6 +64,8 @@ type UploadResponse = {
   check_result?: CheckResult;
 };
 
+const EDITORIAL_EASE = [0.22, 1, 0.36, 1] as const;
+
 const EXAMPLE =
   "Our serum is clinically proven to remove wrinkles in 3 days. Launching Friday 20 Nov with flat 30% off!";
 
@@ -57,7 +75,12 @@ const CHECK_STEPS = [
   "3. Checking claims against approved library",
 ];
 
-const CHANNELS = ["Instagram", "Email", "Display Ads", "Sales"];
+const CHANNELS = [
+  { id: "Instagram", icon: Share2 },
+  { id: "Email", icon: Mail },
+  { id: "Display Ads", icon: Monitor },
+  { id: "Sales", icon: Briefcase },
+] as const;
 
 const severityStyle: Record<string, string> = {
   HIGH: "bg-[#f9ddd9] text-[#9b1c13]",
@@ -112,6 +135,11 @@ export default function SubmitPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Magnetic Dropzone & Typewriter state
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+  const typewriterRef = useRef<number | null>(null);
+
   // Save draft & handover state (POST /drafts, POST /drafts/:id/handover)
   const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
   const [submittingDraft, setSubmittingDraft] = useState(false);
@@ -130,6 +158,18 @@ export default function SubmitPage() {
   const [mistakeSavingId, setMistakeSavingId] = useState<string | null>(null);
   const [mistakeStatus, setMistakeStatus] = useState<Record<string, string>>({});
 
+  function stopTypewriter(finishExample = false) {
+    if (typewriterRef.current !== null) {
+      window.clearInterval(typewriterRef.current);
+      typewriterRef.current = null;
+      if (finishExample) setText(EXAMPLE);
+    }
+  }
+
+  useEffect(() => {
+    return () => stopTypewriter(false);
+  }, []);
+
   // Advance the 3-step pipeline animation while /check or /upload is running.
   useEffect(() => {
     if (!loading && !uploadingFile) return;
@@ -139,8 +179,32 @@ export default function SubmitPage() {
     return () => clearInterval(timer);
   }, [loading, uploadingFile]);
 
+  function startExampleTypewriter() {
+    stopTypewriter(false);
+    if (!draftTitle.trim()) setDraftTitle("Winter Serum Launch");
+    setSavedDraftId(null);
+    setNotice(null);
+    setError(null);
+    setText("");
+
+    let cursor = 0;
+    typewriterRef.current = window.setInterval(() => {
+      cursor += 3;
+      if (cursor >= EXAMPLE.length) {
+        setText(EXAMPLE);
+        stopTypewriter(false);
+      } else {
+        setText(EXAMPLE.slice(0, cursor));
+      }
+    }, 12);
+  }
+
   async function handleCheck() {
-    if (!text.trim()) {
+    const wasTypingExample = typewriterRef.current !== null;
+    stopTypewriter(wasTypingExample);
+    const activeText = wasTypingExample ? EXAMPLE : text;
+
+    if (!activeText.trim()) {
       setError("Paste or type a draft first.");
       return;
     }
@@ -153,9 +217,12 @@ export default function SubmitPage() {
     setActiveStep(0);
     setLoading(true);
     try {
-      const data = await api<CheckResult>("/check", { method: "POST", body: { text } });
+      const data = await api<CheckResult>("/check", {
+        method: "POST",
+        body: { text: activeText },
+      });
       setResult(data);
-      setCheckedText(text);
+      setCheckedText(activeText);
     } catch (err) {
       setResult(null);
       setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
@@ -165,6 +232,7 @@ export default function SubmitPage() {
   }
 
   function handleClear() {
+    stopTypewriter(false);
     setDraftTitle("");
     setText("");
     setCheckedText("");
@@ -181,11 +249,8 @@ export default function SubmitPage() {
     setMistakeStatus({});
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-
+  async function loadTextFile(file: File) {
+    stopTypewriter(false);
     const allowedExt = /\.(txt|md|markdown|csv|tsv|json|html|htm|xml|yml|yaml|rtf|docx|pptx|pdf|png|jpe?g|webp|gif)$/i;
     const isPlainText =
       /\.(txt|md|markdown)$/i.test(file.name) ||
@@ -277,6 +342,48 @@ export default function SubmitPage() {
       );
     } finally {
       setUploadingFile(false);
+    }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    await loadTextFile(file);
+  }
+
+  function handleDragEnter(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function handleDragLeave(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await loadTextFile(file);
     }
   }
 
@@ -439,553 +546,753 @@ export default function SubmitPage() {
   const outOfDate = result !== null && text !== checkedText;
   const busy = loading || uploadingFile;
   const pipelineStep = busy ? activeStep : result ? 3 : -1;
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="animate-pop-in">
-        <h1 className="text-2xl font-semibold sm:text-4xl">Submit draft</h1>
-        <p className="mt-2 max-w-2xl text-sm text-[var(--tv-muted)] sm:text-base">
-          Paste a draft to see what needs fixing before a reviewer looks at it. TrueVoice checks it
-          against the approved library, shows the source for every finding, and leaves the decision
-          to a person.
-        </p>
+    <div className="relative mx-auto max-w-4xl">
+      {/* Soft Ambient Spotlight Background */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+      >
+        <div className="absolute -left-24 top-16 h-[420px] w-[420px] rounded-full bg-[#EFE5CE]/70 blur-3xl" />
+        <div className="absolute right-[-6rem] top-28 h-[380px] w-[380px] rounded-full bg-[#58182E]/[0.07] blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-[340px] w-[460px] rounded-full bg-[#DECDA9]/45 blur-3xl" />
       </div>
 
-      {/* Live 3-Step Check Radar */}
-      <div className="animate-pop-in grid gap-2 rounded-2xl border border-[var(--tv-line)] bg-white p-3 shadow-xs sm:grid-cols-3">
-        {CHECK_STEPS.map((label, idx) => {
-          const done = pipelineStep > idx;
-          const current = pipelineStep === idx;
-          return (
-            <div
-              key={label}
-              className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all duration-300 ${
-                done
-                  ? "bg-[#ddebdd] text-[#1f6b3a]"
-                  : current
-                    ? "bg-[var(--tv-brand)] text-white shadow-sm"
-                    : "bg-[var(--tv-paper)] text-[var(--tv-muted)]"
-              }`}
-            >
-              {done ? (
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#1f6b3a] text-[10px] text-white">
-                  &#10003;
-                </span>
-              ) : (
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  {current && (
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--tv-champagne)] opacity-75" />
-                  )}
-                  <span
-                    className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
-                      current ? "bg-[var(--tv-champagne)]" : "bg-[var(--tv-edge)]/40"
-                    }`}
-                  />
-                </span>
-              )}
-              <span>{label}</span>
-            </div>
-          );
-        })}
-      </div>
+      <div className="space-y-6">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: EDITORIAL_EASE }}
+        >
+          <h1 className="text-2xl font-semibold sm:text-4xl">Submit draft</h1>
+          <p className="mt-2 max-w-2xl text-sm text-[var(--tv-muted)] sm:text-base">
+            Paste a draft to see what needs fixing before a reviewer looks at it. TrueVoice checks
+            it against the approved library, shows the source for every finding, and leaves the
+            decision to a person.
+          </p>
+        </motion.div>
 
-      {/* Title, Channel & Draft Input */}
-      <div className="animate-pop-in space-y-4">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="sm:col-span-2">
-            <label htmlFor="draft-title" className="text-sm font-medium">
-              Draft title
-            </label>
-            <input
-              id="draft-title"
-              type="text"
-              value={draftTitle}
-              onChange={(e) => setDraftTitle(e.target.value)}
-              placeholder="e.g. Winter Serum Launch Post"
-              className="mt-1.5 w-full rounded-xl border border-[var(--tv-edge)] bg-white px-3.5 py-2 text-sm outline-none focus:border-[var(--tv-brand)]"
-            />
-          </div>
-          <div>
-            <label htmlFor="draft-channel" className="text-sm font-medium">
-              Channel
-            </label>
-            <select
-              id="draft-channel"
-              value={channel}
-              onChange={(e) => setChannel(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-[var(--tv-edge)] bg-white px-3.5 py-2 text-sm outline-none focus:border-[var(--tv-brand)]"
-            >
-              {CHANNELS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="draft" className="font-medium">
-            Your draft
-          </label>
-          <div className="relative mt-2 overflow-hidden rounded-xl border border-[var(--tv-edge)] bg-white shadow-xs transition focus-within:border-[var(--tv-brand)] focus-within:ring-2 focus-within:ring-[var(--tv-brand)]/15">
-            {busy && (
+        {/* Live 3-Step Check Radar */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.06, ease: EDITORIAL_EASE }}
+          className="grid gap-2 rounded-2xl border border-[var(--tv-champagne)] bg-white/90 p-3 shadow-xs backdrop-blur-xs sm:grid-cols-3"
+        >
+          {CHECK_STEPS.map((label, idx) => {
+            const done = pipelineStep > idx;
+            const current = pipelineStep === idx;
+            return (
               <div
-                aria-hidden="true"
-                className="animate-scan-sweep pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-[var(--tv-champagne)]/45 to-transparent"
-              />
-            )}
-            <textarea
-              id="draft"
-              rows={7}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Paste your post, ad copy, or email draft here..."
-              className="block w-full bg-transparent p-3.5 text-sm outline-none sm:p-4 sm:text-base"
-            />
-          </div>
-        </div>
+                key={label}
+                className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all duration-300 ${
+                  done
+                    ? "bg-[#ddebdd] text-[#1f6b3a]"
+                    : current
+                      ? "bg-[var(--tv-brand)] text-white shadow-sm"
+                      : "bg-[var(--tv-paper)] text-[var(--tv-muted)]"
+                }`}
+              >
+                {done ? (
+                  <motion.span
+                    initial={{ scale: 0.7 }}
+                    animate={{ scale: 1 }}
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#1f6b3a] text-[10px] text-white"
+                  >
+                    <Check className="h-2.5 w-2.5" />
+                  </motion.span>
+                ) : (
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    {current && (
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--tv-champagne)] opacity-75" />
+                    )}
+                    <span
+                      className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
+                        current ? "bg-[var(--tv-champagne)]" : "bg-[var(--tv-edge)]/40"
+                      }`}
+                    />
+                  </span>
+                )}
+                <span>{label}</span>
+              </div>
+            );
+          })}
+        </motion.div>
 
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
-          <button
-            type="button"
-            onClick={handleCheck}
-            disabled={busy}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--tv-brand)] px-6 py-2.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--tv-brand-ink)] active:scale-95 disabled:opacity-60 sm:w-auto"
-          >
-            {loading && (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        {/* Tactile Stationery Sheet + Magnetic Dropzone */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0, scale: isDragging ? 1.01 : 1 }}
+          transition={{ duration: 0.45, delay: 0.1, ease: EDITORIAL_EASE }}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`relative overflow-hidden rounded-3xl border bg-white/95 shadow-[0_20px_50px_-26px_rgba(88,24,46,0.22)] backdrop-blur-xs transition-colors duration-200 ${
+            isDragging
+              ? "border-2 border-dashed border-[var(--tv-brand)] ring-4 ring-[var(--tv-champagne)]/60"
+              : "border-[var(--tv-champagne)]"
+          }`}
+        >
+          {/* Magnetic Drop Overlay */}
+          <AnimatePresence>
+            {isDragging && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-[#FAF6EE]/92 backdrop-blur-xs"
+              >
+                <motion.div
+                  initial={{ scale: 0.85, y: 6 }}
+                  animate={{ scale: 1, y: 0 }}
+                  transition={{ type: "spring", stiffness: 360, damping: 24 }}
+                  className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--tv-champagne)] bg-white px-7 py-5 shadow-md"
+                >
+                  <Upload className="h-7 w-7 text-[var(--tv-brand)]" />
+                  <p className="font-serif text-lg font-semibold text-[var(--tv-brand)]">
+                    Drop your draft, PDF, or ad image here
+                  </p>
+                  <p className="text-xs text-[var(--tv-muted)]">
+                    Release to scan copy or ad creative (max 3 MB)
+                  </p>
+                </motion.div>
+              </motion.div>
             )}
-            <span>{loading ? "Checking draft…" : "Check draft"}</span>
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (!draftTitle.trim()) setDraftTitle("Winter Serum Launch");
-              setUploadedImagePreview(null);
-              setUploadedFileName(null);
-              setVisualSummary(null);
-              setText(EXAMPLE);
-              setSavedDraftId(null);
-              setNotice(null);
-            }}
-            className="w-full rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95 disabled:opacity-60 sm:w-auto"
-          >
-            Use example draft
-          </button>
-          <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--tv-edge)] bg-white px-4 py-2.5 text-center text-sm font-medium transition hover:bg-[var(--tv-paper)] active:scale-95 sm:w-auto">
-            {uploadingFile && (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--tv-brand)]/30 border-t-[var(--tv-brand)]" />
-            )}
-            <span>{uploadingFile ? "Scanning file…" : "Upload file / ad image"}</span>
-            <input
-              type="file"
+          </AnimatePresence>
+
+          {/* Top Stationery Header Strip */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--tv-line)] bg-gradient-to-r from-[#fbf7f0] to-white px-5 py-3 text-xs">
+            <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-[var(--tv-brand)]">
+              <FileText className="h-3.5 w-3.5" />
+              Editorial Draft Sheet
+            </span>
+            <div className="flex items-center gap-3 text-[var(--tv-muted)] tabular-nums">
+              <span>{wordCount} {wordCount === 1 ? "word" : "words"}</span>
+              <span>&middot;</span>
+              <span>{text.length} chars</span>
+            </div>
+          </div>
+
+          {/* Sheet Body */}
+          <div className="space-y-5 p-5 sm:p-6">
+            <div className="grid gap-5 lg:grid-cols-12">
+              <div className="lg:col-span-6">
+                <label htmlFor="draft-title" className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
+                  Draft title
+                </label>
+                <input
+                  id="draft-title"
+                  type="text"
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  placeholder="e.g. Winter Serum Launch Post"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)]/55 px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--tv-brand)] focus:bg-white"
+                />
+              </div>
+
+              <div className="lg:col-span-6">
+                <span className="block text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
+                  Channel
+                </span>
+                <div
+                  role="radiogroup"
+                  aria-label="Channel"
+                  className="mt-1.5 grid grid-cols-2 gap-1.5 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)]/70 p-1 sm:grid-cols-4"
+                >
+                  {CHANNELS.map((c) => {
+                    const Icon = c.icon;
+                    const active = channel === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setChannel(c.id)}
+                        className={`relative flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors ${
+                          active
+                            ? "text-white"
+                            : "text-[var(--tv-muted)] hover:text-[var(--tv-ink)]"
+                        }`}
+                      >
+                        {active && (
+                          <motion.span
+                            layoutId="submit-channel-pill"
+                            transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                            className="absolute inset-0 rounded-lg bg-[var(--tv-brand)] shadow-xs"
+                          />
+                        )}
+                        <Icon className="relative z-10 h-3.5 w-3.5 shrink-0" />
+                        <span className="relative z-10 truncate">{c.id}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor="draft"
+                  className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]"
+                >
+                  Your draft
+                </label>
+                <span className="text-[11px] text-[var(--tv-muted)]">
+                  Drag &amp; drop a .txt, .md, .pdf, .docx, or ad image anywhere on this sheet
+                </span>
+              </div>
+
+              <div className="relative mt-2 overflow-hidden rounded-2xl border border-[var(--tv-line)] bg-[#FAF6EE]/55 transition focus-within:border-[var(--tv-brand)] focus-within:bg-white focus-within:ring-2 focus-within:ring-[var(--tv-brand)]/15">
+                <AnimatePresence>
+                  {busy && (
+                    <motion.div
+                      key="sheet-scanner"
+                      aria-hidden="true"
+                      initial={{ x: "-100%", opacity: 0 }}
+                      animate={{ x: "260%", opacity: [0, 1, 1, 0] }}
+                      exit={{ opacity: 0 }}
+                      transition={{ repeat: Infinity, duration: 1.25, ease: "easeInOut" }}
+                      className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-[var(--tv-champagne)]/55 to-transparent"
+                    />
+                  )}
+                </AnimatePresence>
+                <textarea
+                  id="draft"
+                  rows={8}
+                  value={text}
+                  onChange={(e) => {
+                    stopTypewriter(false);
+                    setText(e.target.value);
+                  }}
+                  placeholder="Paste your post, ad copy, or email draft here..."
+                  className="block w-full resize-y bg-transparent p-4 text-sm leading-relaxed outline-none sm:p-5 sm:text-base"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Floating Bottom Action Dock */}
+          <div className="flex flex-col gap-3 border-t border-[var(--tv-line)] bg-[#fbf7f0]/90 px-5 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <motion.button
+                type="button"
+                whileHover={!busy ? { y: -1 } : undefined}
+                whileTap={!busy ? { scale: 0.97 } : undefined}
+                onClick={handleCheck}
+                disabled={busy}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--tv-brand)] px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                <span>{loading ? "Checking draft…" : "Check draft"}</span>
+              </motion.button>
+
+              <motion.button
+                type="button"
+                whileTap={!busy ? { scale: 0.97 } : undefined}
+                disabled={busy}
+                onClick={() => {
+                  setUploadedImagePreview(null);
+                  setUploadedFileName(null);
+                  setVisualSummary(null);
+                  startExampleTypewriter();
+                }}
+                className="w-full rounded-xl border border-[var(--tv-champagne)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--tv-ink)] transition hover:bg-[var(--tv-paper)] disabled:opacity-60 sm:w-auto"
+              >
+                Use example draft
+              </motion.button>
+
+              <label className="inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-[var(--tv-champagne)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--tv-ink)] transition hover:bg-[var(--tv-paper)] active:scale-95 sm:w-auto">
+                {uploadingFile ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--tv-brand)]" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5 text-[var(--tv-brand)]" />
+                )}
+                <span>{uploadingFile ? "Scanning file…" : "Upload file / ad image"}</span>
+                <input
+                  type="file"
+                  disabled={busy}
+                  accept=".txt,.md,.csv,.json,.html,.rtf,.docx,.pptx,.pdf,.png,.jpg,.jpeg,.webp,.gif"
+                  onChange={handleFileUpload}
+                  className="sr-only"
+                />
+              </label>
+            </div>
+
+            <motion.button
+              type="button"
+              whileTap={!busy ? { scale: 0.97 } : undefined}
               disabled={busy}
-              accept=".txt,.md,.csv,.json,.html,.rtf,.docx,.pptx,.pdf,.png,.jpg,.jpeg,.webp,.gif"
-              onChange={handleFileUpload}
-              className="sr-only"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handleClear}
-            className="w-full rounded-xl border border-[var(--tv-edge)] px-4 py-2.5 text-sm font-medium transition hover:bg-white active:scale-95 disabled:opacity-60 sm:w-auto"
-          >
-            Clear
-          </button>
-        </div>
+              onClick={handleClear}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--tv-line)] bg-white/70 px-4 py-2.5 text-sm font-medium text-[var(--tv-muted)] transition hover:bg-white hover:text-[var(--tv-ink)] disabled:opacity-60 sm:w-auto"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Clear</span>
+            </motion.button>
+          </div>
+        </motion.div>
         <p className="text-xs text-[var(--tv-muted)]">
           Supported formats: pasted text, <code>.txt</code>, <code>.md</code>, <code>.docx</code>,{" "}
           <code>.pptx</code>, <code>.pdf</code>, and ad images (<code>.png</code>, <code>.jpg</code>,{" "}
           <code>.webp</code>) with visual &amp; logo checks (max 3 MB).
         </p>
-      </div>
 
-      {(uploadedImagePreview || visualSummary) && (
-        <div className="animate-pop-in flex flex-col gap-4 rounded-2xl border border-[var(--tv-line)] bg-white p-4 shadow-xs sm:flex-row sm:items-center">
-          {uploadedImagePreview && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={uploadedImagePreview}
-              alt={uploadedFileName ?? "Uploaded ad creative"}
-              className="h-28 w-full shrink-0 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] object-contain sm:w-36"
-            />
-          )}
-          <div className="min-w-0 space-y-1 text-sm">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-brand)]">
-              Visual &amp; Logo Inspection {uploadedFileName ? `· ${uploadedFileName}` : ""}
-            </p>
-            <p className="text-[var(--tv-ink)]">
-              {visualSummary ||
-                "Image text extracted and checked against Glowvale brand guidelines, seals, and logo rules."}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <p role="alert" className="animate-pop-in font-medium text-[var(--tv-flag)]">
-          {error}
-        </p>
-      )}
-
-      {notice && (
-        <div
-          role="status"
-          className="animate-pop-in flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#1f6b3a]/30 bg-[#ddebdd]/50 p-3 text-sm font-medium text-[#1f6b3a]"
-        >
-          <span>&#10003; {notice}</span>
-          {savedDraftId && (
-            <Link href="/dashboard/review" className="font-semibold underline">
-              Open in Review queue &rarr;
-            </Link>
-          )}
-        </div>
-      )}
-
-      {result && (
-        <section className="space-y-6 pt-2" aria-label="Check results">
-          {/* Overall Risk Summary + Submit for Human Review */}
-          <div
-            role="status"
-            className="animate-pop-in flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-[var(--tv-champagne)] bg-white p-4 shadow-sm sm:p-5"
-          >
-            <div className="flex flex-wrap items-center gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
-                  Overall risk
+        <AnimatePresence>
+          {(uploadedImagePreview || visualSummary) && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="flex flex-col gap-4 rounded-2xl border border-[var(--tv-champagne)] bg-white/95 p-4 shadow-xs sm:flex-row sm:items-center"
+            >
+              {uploadedImagePreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={uploadedImagePreview}
+                  alt={uploadedFileName ?? "Uploaded ad creative"}
+                  className="h-28 w-full shrink-0 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] object-contain sm:w-36"
+                />
+              )}
+              <div className="min-w-0 space-y-1 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-brand)]">
+                  Visual &amp; Logo Inspection {uploadedFileName ? `· ${uploadedFileName}` : ""}
                 </p>
-                <span
-                  className={`mt-1 inline-flex items-center gap-2 rounded-full px-4 py-1 text-base font-semibold sm:text-lg ${
-                    severityStyle[risk] ?? "bg-[var(--tv-paper)]"
-                  }`}
+                <p className="text-[var(--tv-ink)]">
+                  {visualSummary ||
+                    "Image text extracted and checked against Glowvale brand guidelines, seals, and logo rules."}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {error && (
+            <motion.p
+              role="alert"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="rounded-xl border border-[#f2c4be] bg-[#f9ddd9]/55 px-4 py-2.5 text-sm font-medium text-[var(--tv-flag)]"
+            >
+              {error}
+            </motion.p>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {notice && (
+            <motion.div
+              role="status"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#1f6b3a]/30 bg-[#ddebdd]/60 p-3.5 text-sm font-medium text-[#1f6b3a]"
+            >
+              <span>&#10003; {notice}</span>
+              {savedDraftId && (
+                <Link
+                  href="/dashboard/review"
+                  className="inline-flex items-center gap-1 font-semibold underline"
                 >
-                  {risk === "HIGH" && (
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#9b1c13] opacity-75" />
-                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#9b1c13]" />
-                    </span>
-                  )}
-                  {severityLabel[risk] ?? (risk || "Unknown")}
-                </span>
-              </div>
-
-              <div className="text-sm">
-                <p className="font-semibold">
-                  {result.findings_count ?? findings.length}{" "}
-                  {(result.findings_count ?? findings.length) === 1 ? "finding" : "findings"}
-                </p>
-                {result.summary && (
-                  <p className="text-[var(--tv-muted)]">
-                    {result.summary.high_severity_count ?? 0} high,{" "}
-                    {result.summary.medium_severity_count ?? 0} medium,{" "}
-                    {result.summary.low_severity_count ?? 0} low
-                    {(result.summary.unverified_count ?? 0) > 0 &&
-                      `, ${result.summary.unverified_count} unverified`}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex w-full items-center gap-3 sm:w-auto">
-              <span className="hidden text-xs text-[var(--tv-muted)] sm:inline">
-                &#10022; Human decides
-              </span>
-              <button
-                type="button"
-                disabled={submittingDraft || Boolean(savedDraftId) || outOfDate}
-                onClick={submitDraftToQueue}
-                className="w-full rounded-xl bg-[var(--tv-brand)] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95 disabled:opacity-60 sm:w-auto sm:py-2"
-              >
-                {savedDraftId
-                  ? "✓ Submitted to Queue"
-                  : submittingDraft
-                    ? "Submitting…"
-                    : "Submit for human review"}
-              </button>
-            </div>
-          </div>
-
-          {outOfDate && (
-            <p className="animate-pop-in rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-[#7a4b00]">
-              Your draft has changed since this check. Run <strong>Check draft</strong> again for
-              fresh results before submitting.
-            </p>
+                  Open in Review queue
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              )}
+            </motion.div>
           )}
+        </AnimatePresence>
 
-          {findings.length === 0 ? (
-            <p className="animate-pop-in rounded-xl border border-dashed border-[var(--tv-edge)] bg-white p-5">
-              No findings. Nothing in the approved library conflicts with this draft. A person still
-              makes the final decision.
-            </p>
-          ) : (
-            <ol className="space-y-4">
-              {findings.map((f, idx) => {
-                const sev = (f.severity ?? "").toUpperCase();
-                const confidence =
-                  typeof f.confidence === "number"
-                    ? Math.round(f.confidence <= 1 ? f.confidence * 100 : f.confidence)
-                    : null;
-                const whyOpen = openWhyId === f.id;
-                const handed = Boolean(handedIds[f.id]);
-
-                return (
-                  <li
-                    key={f.id}
-                    style={{ animationDelay: `${idx * 90}ms` }}
-                    className="animate-pop-in rounded-2xl border border-[var(--tv-line)] bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`rounded-full px-3 py-0.5 text-xs font-semibold ${
-                            severityStyle[sev] ?? "bg-[var(--tv-paper)]"
-                          }`}
-                        >
-                          {severityLabel[sev] ?? "Finding"}
+        <AnimatePresence>
+          {result && (
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4, ease: EDITORIAL_EASE }}
+              className="space-y-6 pt-2"
+              aria-label="Check results"
+            >
+              {/* Overall Risk Summary + Submit for Human Review */}
+              <div
+                role="status"
+                className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-[var(--tv-champagne)] bg-white/95 p-4 shadow-sm backdrop-blur-xs sm:p-5"
+              >
+                <div className="flex flex-wrap items-center gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
+                      Overall risk
+                    </p>
+                    <span
+                      className={`mt-1 inline-flex items-center gap-2 rounded-full px-4 py-1 text-base font-semibold sm:text-lg ${
+                        severityStyle[risk] ?? "bg-[var(--tv-paper)]"
+                      }`}
+                    >
+                      {risk === "HIGH" && (
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#9b1c13] opacity-75" />
+                          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#9b1c13]" />
                         </span>
-                        <span className="font-semibold">{typeLabel(f.type)}</span>
-                      </div>
-
-                      {canReportMistake && (
-                        <button
-                          type="button"
-                          onClick={() => toggleReportDrawer(f)}
-                          className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
-                            openReportId === f.id || mistakeStatus[f.id]?.startsWith("✓")
-                              ? "border-[var(--tv-brand)] bg-[var(--tv-paper)] text-[var(--tv-brand)]"
-                              : "border-[var(--tv-line)] text-[var(--tv-muted)] hover:bg-[var(--tv-paper)]"
-                          }`}
-                        >
-                          {mistakeStatus[f.id]?.startsWith("✓")
-                            ? "✓ AI mistake reported"
-                            : "⚑ Report AI Mistake"}
-                        </button>
                       )}
-                    </div>
+                      {severityLabel[risk] ?? (risk || "Unknown")}
+                    </span>
+                  </div>
+                  <div className="text-sm">
+                    <p className="font-semibold">
+                      {result.findings_count ?? findings.length}{" "}
+                      {(result.findings_count ?? findings.length) === 1 ? "finding" : "findings"}
+                    </p>
+                    {result.summary && (
+                      <p className="text-[var(--tv-muted)]">
+                        {result.summary.high_severity_count ?? 0} high,{" "}
+                        {result.summary.medium_severity_count ?? 0} medium,{" "}
+                        {result.summary.low_severity_count ?? 0} low
+                        {(result.summary.unverified_count ?? 0) > 0 &&
+                          `, ${result.summary.unverified_count} unverified`}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-                    {mistakeStatus[f.id] && (
-                      <p
-                        role="status"
-                        className={`animate-pop-in mt-2 rounded-lg px-3 py-1.5 text-xs font-medium ${
-                          mistakeStatus[f.id].startsWith("✓")
-                            ? "bg-[#ddebdd] text-[#1f6b3a]"
-                            : "bg-[#f9ddd9] text-[#9b1c13]"
-                        }`}
+                <div className="flex w-full items-center gap-3 sm:w-auto">
+                  <span className="hidden text-xs text-[var(--tv-muted)] sm:inline">
+                    &#10022; Human decides
+                  </span>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    disabled={submittingDraft || Boolean(savedDraftId) || outOfDate}
+                    onClick={submitDraftToQueue}
+                    className="w-full rounded-xl bg-[var(--tv-brand)] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto sm:py-2"
+                  >
+                    {savedDraftId
+                      ? "✓ Submitted to Queue"
+                      : submittingDraft
+                        ? "Submitting…"
+                        : "Submit for human review"}
+                  </motion.button>
+                </div>
+              </div>
+
+              {outOfDate && (
+                <p className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-[#7a4b00]">
+                  Your draft has changed since this check. Run <strong>Check draft</strong> again
+                  for fresh results before submitting.
+                </p>
+              )}
+
+              {findings.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-[var(--tv-edge)] bg-white p-5">
+                  No findings. Nothing in the approved library conflicts with this draft. A person
+                  still makes the final decision.
+                </p>
+              ) : (
+                <ol className="space-y-4">
+                  {findings.map((f, idx) => {
+                    const sev = (f.severity ?? "").toUpperCase();
+                    const confidence =
+                      typeof f.confidence === "number"
+                        ? Math.round(f.confidence <= 1 ? f.confidence * 100 : f.confidence)
+                        : null;
+                    const whyOpen = openWhyId === f.id;
+                    const handed = Boolean(handedIds[f.id]);
+
+                    return (
+                      <motion.li
+                        key={f.id}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: 0.35,
+                          delay: idx * 0.06,
+                          ease: EDITORIAL_EASE,
+                        }}
+                        className="rounded-2xl border border-[var(--tv-line)] bg-white/95 p-4 shadow-sm transition hover:shadow-md sm:p-5"
                       >
-                        {mistakeStatus[f.id]}
-                      </p>
-                    )}
-
-                    {/* Report AI Mistake Inline Drawer (Reviewer/Admin) */}
-                    <div
-                      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
-                        openReportId === f.id
-                          ? "grid-rows-[1fr] opacity-100"
-                          : "grid-rows-[0fr] opacity-0"
-                      }`}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="mt-3 space-y-2.5 rounded-xl border border-[var(--tv-champagne)] bg-[var(--tv-paper)] p-3.5 text-xs">
-                          <p className="font-semibold text-[var(--tv-ink)]">
-                            Correct the AI for future checks (saved as an example, no retraining):
-                          </p>
-                          <p className="text-[11px] text-[var(--tv-muted)]">
-                            Note: Only affects AI &amp; regional-nuance checks. Exact company rules
-                            (like expired offers or prices) stay enforced.
-                          </p>
-                          <div className="grid gap-2 sm:grid-cols-3">
-                            <div className="sm:col-span-2">
-                              <label className="block font-medium text-[var(--tv-muted)]">
-                                Phrase (required, max 120)
-                              </label>
-                              <input
-                                type="text"
-                                maxLength={120}
-                                value={mistakeForm.phrase}
-                                onChange={(e) =>
-                                  setMistakeForm((p) => ({ ...p, phrase: e.target.value }))
-                                }
-                                className="mt-1 w-full rounded-lg border border-[var(--tv-line)] bg-white px-2.5 py-1.5 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <label className="block font-medium text-[var(--tv-muted)]">
-                                Region (max 60)
-                              </label>
-                              <input
-                                type="text"
-                                maxLength={60}
-                                value={mistakeForm.region}
-                                onChange={(e) =>
-                                  setMistakeForm((p) => ({ ...p, region: e.target.value }))
-                                }
-                                className="mt-1 w-full rounded-lg border border-[var(--tv-line)] bg-white px-2.5 py-1.5 text-xs"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block font-medium text-[var(--tv-muted)]">
-                              Your correction / why it&rsquo;s okay (required, max 300)
-                            </label>
-                            <textarea
-                              rows={2}
-                              maxLength={300}
-                              value={mistakeForm.user_correction}
-                              onChange={(e) =>
-                                setMistakeForm((p) => ({
-                                  ...p,
-                                  user_correction: e.target.value,
-                                }))
-                              }
-                              placeholder="e.g. Acceptable regional slang / benign campaign phrasing."
-                              className="mt-1 w-full rounded-lg border border-[var(--tv-line)] bg-white p-2 text-xs"
-                            />
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              disabled={mistakeSavingId === f.id}
-                              onClick={() => submitAiMistake(f)}
-                              className="w-full rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto"
-                            >
-                              {mistakeSavingId === f.id ? "Saving…" : "Save correction"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setOpenReportId(null)}
-                              className="w-full rounded-lg border border-[var(--tv-line)] bg-white px-3 py-1.5 sm:w-auto"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {f.flagged_text && (
-                      <p className="mt-3 break-words text-sm">
-                        Flagged wording:{" "}
-                        <mark className="rounded bg-[#f9ddd9] px-1.5 py-0.5 font-medium text-[#9b1c13]">
-                          {f.flagged_text}
-                        </mark>
-                      </p>
-                    )}
-
-                    <p className="mt-2 text-sm">{f.reason}</p>
-
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--tv-paper)] px-3.5 py-2.5 text-xs text-[var(--tv-muted)]">
-                      <span>
-                        {f.rule_ref && <>Rule {f.rule_ref}</>}
-                        {f.rule_ref && f.source_id && <> &middot; </>}
-                        {f.source_id ? (
-                          <strong className="text-[var(--tv-ink)]">Source {f.source_id}</strong>
-                        ) : (
-                          <strong className="text-[#7a4b00]">Unverified, needs source</strong>
-                        )}
-                      </span>
-
-                      {confidence !== null && (
-                        <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
-                          <span>Confidence {confidence}%</span>
-                          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-white">
-                            <div
-                              className={`animate-bar-grow h-full rounded-full ${
-                                severityBarColor[sev] ?? "bg-[var(--tv-brand)]"
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`rounded-full px-3 py-0.5 text-xs font-semibold ${
+                                severityStyle[sev] ?? "bg-[var(--tv-paper)]"
                               }`}
-                              style={{ width: `${confidence}%` }}
-                            />
+                            >
+                              {severityLabel[sev] ?? "Finding"}
+                            </span>
+                            <span className="font-semibold">{typeLabel(f.type)}</span>
                           </div>
-                        </div>
-                      )}
-                    </div>
 
-                    {f.suggested_fix && (
-                      <div className="mt-4 flex flex-col items-stretch gap-3 rounded-xl border border-[#1f6b3a]/20 bg-[#ddebdd]/40 p-3 sm:flex-row sm:items-center">
-                        <p className="min-w-0 flex-1 break-words text-sm">
-                          <span className="font-semibold text-[#1f6b3a]">Suggested fix:</span>{" "}
-                          {f.suggested_fix}
-                        </p>
-                        {needsPerson(f.type) ? (
-                          <span className="text-xs font-semibold text-[#7a4b00]">
-                            Needs a person: check the schedule
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => applyFix(f)}
-                            className="w-full shrink-0 rounded-lg bg-[var(--tv-brand)] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] active:scale-95 sm:w-auto sm:py-1.5"
-                          >
-                            Use this fix
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* One-Chance "Why flagged?" -> Hand to Manager */}
-                    <div className="mt-3 flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setOpenWhyId(whyOpen ? null : f.id)}
-                        className="text-xs font-semibold text-[var(--tv-brand)] underline"
-                      >
-                        {whyOpen ? "Hide context" : "Why flagged? (1-chance context)"}
-                      </button>
-                    </div>
-
-                    <div
-                      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
-                        whyOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-                      }`}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="mt-2 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] p-3 text-xs">
-                          {!handed ? (
-                            <>
-                              <p className="font-semibold text-[var(--tv-ink)]">
-                                Give one quick explanation (e.g. a campaign pun), or pass to a
-                                human manager:
-                              </p>
-                              <textarea
-                                rows={2}
-                                value={whyNotes[f.id] ?? ""}
-                                onChange={(e) =>
-                                  setWhyNotes((prev) => ({ ...prev, [f.id]: e.target.value }))
-                                }
-                                placeholder="Add context for your reviewer..."
-                                className="mt-2 w-full rounded-lg border border-[var(--tv-line)] bg-white p-2 text-xs"
-                              />
-                              <button
-                                type="button"
-                                disabled={handingId === f.id}
-                                onClick={() => handleHandover(f, idx)}
-                                className="mt-2 w-full rounded-lg bg-[#7a4b00] px-3 py-1.5 font-semibold text-white transition hover:bg-[#5e3a00] active:scale-95 disabled:opacity-60 sm:w-auto"
-                              >
-                                {handingId === f.id ? "Sending to manager…" : "Hand to Manager"}
-                              </button>
-                            </>
-                          ) : (
-                            <p className="font-semibold text-[#1f6b3a]">
-                              &#10003; Handed to human manager and saved to Review Queue.
-                            </p>
+                          {canReportMistake && (
+                            <button
+                              type="button"
+                              onClick={() => toggleReportDrawer(f)}
+                              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                                openReportId === f.id || mistakeStatus[f.id]?.startsWith("✓")
+                                  ? "border-[var(--tv-brand)] bg-[var(--tv-paper)] text-[var(--tv-brand)]"
+                                  : "border-[var(--tv-line)] text-[var(--tv-muted)] hover:bg-[var(--tv-paper)]"
+                              }`}
+                            >
+                              <Flag className="h-3 w-3" />
+                              {mistakeStatus[f.id]?.startsWith("✓")
+                                ? "AI mistake reported"
+                                : "Report AI Mistake"}
+                            </button>
                           )}
                         </div>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
 
-          <p className="text-sm text-[var(--tv-muted)]">
-            TrueVoice only checks against the approved library. No finding does not mean a draft is
-            correct, and nothing is published without a person&rsquo;s decision.
-          </p>
-        </section>
-      )}
+                        {mistakeStatus[f.id] && (
+                          <p
+                            role="status"
+                            className={`mt-2 rounded-lg px-3 py-1.5 text-xs font-medium ${
+                              mistakeStatus[f.id].startsWith("✓")
+                                ? "bg-[#ddebdd] text-[#1f6b3a]"
+                                : "bg-[#f9ddd9] text-[#9b1c13]"
+                            }`}
+                          >
+                            {mistakeStatus[f.id]}
+                          </p>
+                        )}
+
+                        {/* Report AI Mistake Inline Drawer (Reviewer/Admin) */}
+                        <AnimatePresence initial={false}>
+                          {openReportId === f.id && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.25, ease: EDITORIAL_EASE }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-3 space-y-2.5 rounded-xl border border-[var(--tv-champagne)] bg-[var(--tv-paper)] p-3.5 text-xs">
+                                <p className="font-semibold text-[var(--tv-ink)]">
+                                  Correct the AI for future checks (saved as an example, no
+                                  retraining):
+                                </p>
+                                <p className="text-[11px] text-[var(--tv-muted)]">
+                                  Note: Only affects AI &amp; regional-nuance checks. Exact company
+                                  rules (like expired offers or prices) stay enforced.
+                                </p>
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                  <div className="sm:col-span-2">
+                                    <label className="block font-medium text-[var(--tv-muted)]">
+                                      Phrase (required, max 120)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      maxLength={120}
+                                      value={mistakeForm.phrase}
+                                      onChange={(e) =>
+                                        setMistakeForm((p) => ({ ...p, phrase: e.target.value }))
+                                      }
+                                      className="mt-1 w-full rounded-lg border border-[var(--tv-line)] bg-white px-2.5 py-1.5 text-xs"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block font-medium text-[var(--tv-muted)]">
+                                      Region (max 60)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      maxLength={60}
+                                      value={mistakeForm.region}
+                                      onChange={(e) =>
+                                        setMistakeForm((p) => ({ ...p, region: e.target.value }))
+                                      }
+                                      className="mt-1 w-full rounded-lg border border-[var(--tv-line)] bg-white px-2.5 py-1.5 text-xs"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block font-medium text-[var(--tv-muted)]">
+                                    Your correction / why it&rsquo;s okay (required, max 300)
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    maxLength={300}
+                                    value={mistakeForm.user_correction}
+                                    onChange={(e) =>
+                                      setMistakeForm((p) => ({
+                                        ...p,
+                                        user_correction: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. Acceptable regional slang / benign campaign phrasing."
+                                    className="mt-1 w-full rounded-lg border border-[var(--tv-line)] bg-white p-2 text-xs"
+                                  />
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={mistakeSavingId === f.id}
+                                    onClick={() => submitAiMistake(f)}
+                                    className="w-full rounded-lg bg-[var(--tv-brand)] px-3 py-1.5 font-semibold text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto"
+                                  >
+                                    {mistakeSavingId === f.id ? "Saving…" : "Save correction"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenReportId(null)}
+                                    className="w-full rounded-lg border border-[var(--tv-line)] bg-white px-3 py-1.5 sm:w-auto"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {f.flagged_text && (
+                          <p className="mt-3 break-words text-sm">
+                            Flagged wording:{" "}
+                            <mark className="rounded bg-[#f9ddd9] px-1.5 py-0.5 font-medium text-[#9b1c13]">
+                              {f.flagged_text}
+                            </mark>
+                          </p>
+                        )}
+
+                        <p className="mt-2 text-sm">{f.reason}</p>
+
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--tv-paper)] px-3.5 py-2.5 text-xs text-[var(--tv-muted)]">
+                          <span>
+                            {f.rule_ref && <>Rule {f.rule_ref}</>}
+                            {f.rule_ref && f.source_id && <> &middot; </>}
+                            {f.source_id ? (
+                              <strong className="text-[var(--tv-ink)]">Source {f.source_id}</strong>
+                            ) : (
+                              <strong className="text-[#7a4b00]">Unverified, needs source</strong>
+                            )}
+                          </span>
+
+                          {confidence !== null && (
+                            <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
+                              <span>Confidence {confidence}%</span>
+                              <div className="h-1.5 w-20 overflow-hidden rounded-full bg-white">
+                                <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${confidence}%` }}
+                                  transition={{ duration: 0.7, ease: EDITORIAL_EASE }}
+                                  className={`h-full rounded-full ${
+                                    severityBarColor[sev] ?? "bg-[var(--tv-brand)]"
+                                  }`}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {f.suggested_fix && (
+                          <div className="mt-4 flex flex-col items-stretch gap-3 rounded-xl border border-[#1f6b3a]/20 bg-[#ddebdd]/40 p-3 sm:flex-row sm:items-center">
+                            <p className="min-w-0 flex-1 break-words text-sm">
+                              <span className="font-semibold text-[#1f6b3a]">Suggested fix:</span>{" "}
+                              {f.suggested_fix}
+                            </p>
+                            {needsPerson(f.type) ? (
+                              <span className="text-xs font-semibold text-[#7a4b00]">
+                                Needs a person: check the schedule
+                              </span>
+                            ) : (
+                              <motion.button
+                                type="button"
+                                whileTap={{ scale: 0.96 }}
+                                onClick={() => applyFix(f)}
+                                className="w-full shrink-0 rounded-lg bg-[var(--tv-brand)] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] sm:w-auto sm:py-1.5"
+                              >
+                                Use this fix
+                              </motion.button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* One-Chance "Why flagged?" -> Hand to Manager */}
+                        <div className="mt-3 flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setOpenWhyId(whyOpen ? null : f.id)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--tv-brand)] underline"
+                          >
+                            <span>
+                              {whyOpen ? "Hide context" : "Why flagged? (1-chance context)"}
+                            </span>
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                                whyOpen ? "rotate-180" : ""
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        <AnimatePresence initial={false}>
+                          {whyOpen && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.25, ease: EDITORIAL_EASE }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-2 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] p-3 text-xs">
+                                {!handed ? (
+                                  <>
+                                    <p className="font-semibold text-[var(--tv-ink)]">
+                                      Give one quick explanation (e.g. a campaign pun), or pass to a
+                                      human manager:
+                                    </p>
+                                    <textarea
+                                      rows={2}
+                                      value={whyNotes[f.id] ?? ""}
+                                      onChange={(e) =>
+                                        setWhyNotes((prev) => ({
+                                          ...prev,
+                                          [f.id]: e.target.value,
+                                        }))
+                                      }
+                                      placeholder="Add context for your reviewer..."
+                                      className="mt-2 w-full rounded-lg border border-[var(--tv-line)] bg-white p-2 text-xs"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={handingId === f.id}
+                                      onClick={() => handleHandover(f, idx)}
+                                      className="mt-2 w-full rounded-lg bg-[#7a4b00] px-3 py-1.5 font-semibold text-white transition hover:bg-[#5e3a00] active:scale-95 disabled:opacity-60 sm:w-auto"
+                                    >
+                                      {handingId === f.id
+                                        ? "Sending to manager…"
+                                        : "Hand to Manager"}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <p className="font-semibold text-[#1f6b3a]">
+                                    &#10003; Handed to human manager and saved to Review Queue.
+                                  </p>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.li>
+                    );
+                  })}
+                </ol>
+              )}
+
+              <p className="text-sm text-[var(--tv-muted)]">
+                TrueVoice only checks against the approved library. No finding does not mean a
+                draft is correct, and nothing is published without a person&rsquo;s decision.
+              </p>
+            </motion.section>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

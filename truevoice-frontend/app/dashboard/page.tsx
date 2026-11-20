@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Activity,
+  ArrowRight,
+  ChevronDown,
+  Pause,
+  Play,
+  ShieldCheck,
+  Sparkles,
+  UserCheck,
+} from "lucide-react";
 import { StaleFactAlerts } from "@/components/StaleFactAlerts";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/SessionContext";
@@ -41,6 +52,9 @@ type DraftMeta = {
 };
 
 type Queue = { drafts: Draft[]; error: string | null } | null;
+type RiskKey = "HIGH" | "MEDIUM" | "LOW";
+
+const EDITORIAL_EASE = [0.22, 1, 0.36, 1] as const;
 
 const roleHelp: Record<string, string> = {
   creator: "Submit drafts and fix flagged claims before they go to review.",
@@ -145,6 +159,11 @@ export default function DashboardPage() {
   const [metaByDraft, setMetaByDraft] = useState<Record<string, DraftMeta>>({});
   const [ringReady, setRingReady] = useState(false);
 
+  // Interactive Bento states
+  const [hoveredRisk, setHoveredRisk] = useState<RiskKey | null>(null);
+  const [activeCheckStep, setActiveCheckStep] = useState(0);
+  const [stepHovered, setStepHovered] = useState(false);
+
   // Live animated demo cycle: "scanning" -> "flagged" -> "fixed"
   const [demoPhase, setDemoPhase] = useState<"scanning" | "flagged" | "fixed">("scanning");
   const [autoDemo, setAutoDemo] = useState(true);
@@ -211,6 +230,15 @@ export default function DashboardPage() {
     return () => clearTimeout(t);
   }, [queue]);
 
+  // Subtle step highlight loop on the "How TrueVoice checks" Bento card
+  useEffect(() => {
+    if (stepHovered) return;
+    const t = setInterval(() => {
+      setActiveCheckStep((s) => (s + 1) % 3);
+    }, 2400);
+    return () => clearInterval(t);
+  }, [stepHovered]);
+
   // Continuous live demo loop on the right-hand finding card
   useEffect(() => {
     if (!autoDemo) return;
@@ -254,10 +282,83 @@ export default function DashboardPage() {
   const medDeg = highDeg + (highCount / total) * 360;
   const lowDeg = medDeg + (medCount / total) * 360;
 
+  const riskRows: {
+    key: RiskKey;
+    label: string;
+    count: number;
+    animated: number;
+    textClass: string;
+    trackClass: string;
+    fillClass: string;
+    colorHex: string;
+  }[] = [
+    {
+      key: "HIGH",
+      label: "High risk",
+      count: highCount,
+      animated: animatedHigh,
+      textClass: "text-[#9b1c13]",
+      trackClass: "bg-[#f9ddd9]",
+      fillClass: "bg-[#9b1c13]",
+      colorHex: "#9b1c13",
+    },
+    {
+      key: "MEDIUM",
+      label: "Medium risk",
+      count: medCount,
+      animated: animatedMed,
+      textClass: "text-[#7a4b00]",
+      trackClass: "bg-[#f6e7c8]",
+      fillClass: "bg-[#c98000]",
+      colorHex: "#c98000",
+    },
+    {
+      key: "LOW",
+      label: "Low risk",
+      count: lowCount,
+      animated: animatedLow,
+      textClass: "text-[#1f6b3a]",
+      trackClass: "bg-[#ddebdd]",
+      fillClass: "bg-[#1f6b3a]",
+      colorHex: "#1f6b3a",
+    },
+  ];
+
+  const checkSteps = [
+    { num: 1, label: "Exact-match rules run first", icon: ShieldCheck, accent: "brand" },
+    { num: 2, label: "AI checks tone & cites approved source", icon: Sparkles, accent: "brand" },
+    { num: 3, label: "Human reviewer makes final call", icon: UserCheck, accent: "ok" },
+  ] as const;
+
+  const donutCenterValue =
+    hoveredRisk === "HIGH"
+      ? highCount
+      : hoveredRisk === "MEDIUM"
+        ? medCount
+        : hoveredRisk === "LOW"
+          ? lowCount
+          : rawDrafts.length;
+
+  const donutCenterLabel =
+    hoveredRisk === "HIGH"
+      ? "High"
+      : hoveredRisk === "MEDIUM"
+        ? "Med"
+        : hoveredRisk === "LOW"
+          ? "Low"
+          : rawDrafts.length === 1
+            ? "draft"
+            : "drafts";
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 sm:space-y-8">
       {/* Header */}
-      <div className="animate-pop-in flex flex-wrap items-end justify-between gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: EDITORIAL_EASE }}
+        className="flex flex-wrap items-end justify-between gap-4"
+      >
         <div>
           <h1 className="text-2xl font-semibold sm:text-4xl">Welcome to TrueVoice</h1>
           <p className="mt-2 text-sm text-[var(--tv-muted)] sm:text-base">
@@ -267,53 +368,70 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
-          <span className="rounded-full border border-[var(--tv-line)] bg-white px-3 py-1 text-xs text-[var(--tv-muted)] shadow-xs">
-            &#10022; Gemini AI assisted &middot; Human decides
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--tv-line)] bg-white px-3 py-1.5 text-xs text-[var(--tv-muted)] shadow-xs">
+            <Sparkles className="h-3.5 w-3.5 text-[var(--tv-brand)]" />
+            Gemini AI assisted &middot; Human decides
           </span>
-          <Link
-            href="/dashboard/submit"
-            className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--tv-brand)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--tv-brand-ink)] hover:shadow-md active:scale-95 sm:w-auto"
-          >
-            <span>+ Check a new draft</span>
-            <span className="transition-transform duration-300 group-hover:translate-x-0.5">&rarr;</span>
-          </Link>
+          <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="w-full sm:w-auto">
+            <Link
+              href="/dashboard/submit"
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--tv-brand)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors duration-200 hover:bg-[var(--tv-brand-ink)] hover:shadow-md sm:w-auto"
+            >
+              <span>+ Check a new draft</span>
+              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </Link>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Bento Top Row */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Card 1: Count-Up Queue + Live Beacon */}
-        <div className="animate-pop-in rounded-2xl border border-[var(--tv-line)] bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
-            Drafts in queue
-          </span>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="font-serif text-5xl font-semibold tabular-nums text-[var(--tv-brand)]">
+      {/* Asymmetric Editorial Bento Row (12 columns) */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        {/* Card 1 (Hero Burgundy): Drafts in Queue + Live Beacon */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: EDITORIAL_EASE }}
+          whileHover={{ y: -4 }}
+          className="relative flex flex-col justify-between overflow-hidden rounded-2xl border border-[var(--tv-brand-ink)] bg-[var(--tv-brand)] p-5 text-[#FAF6EE] shadow-sm transition-shadow duration-300 hover:shadow-md lg:col-span-4"
+        >
+          {/* Subtle champagne radial highlight */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-[#EFE5CE]/15 blur-2xl"
+          />
+
+          <div className="relative flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#EFE5CE]/80">
+              Drafts in queue
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#EFE5CE]/20 bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#EFE5CE]">
+              <Activity className="h-3 w-3" />
+              Live
+            </span>
+          </div>
+
+          <div className="relative my-3 flex items-baseline gap-2.5">
+            <span className="font-serif text-5xl font-semibold tabular-nums tracking-tight text-[#FAF6EE] sm:text-6xl">
               {queue ? animatedTotal : "-"}
             </span>
-            <span className="text-sm text-[var(--tv-muted)]">awaiting review</span>
+            <span className="text-sm text-[#EFE5CE]/85">awaiting review</span>
           </div>
+
           <p
             role="status"
-            className={`mt-4 flex items-center gap-2 text-xs font-medium ${
-              backend === "up"
-                ? "text-[var(--tv-ok)]"
-                : backend === "down"
-                  ? "text-[var(--tv-flag)]"
-                  : "text-[var(--tv-muted)]"
-            }`}
+            className="relative inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-black/20 px-3 py-1.5 text-xs font-medium text-[#FAF6EE]"
           >
             <span className="relative flex h-2.5 w-2.5">
               {backend === "up" && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--tv-ok)] opacity-75" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               )}
               <span
                 className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
                   backend === "up"
-                    ? "bg-[var(--tv-ok)]"
+                    ? "bg-emerald-400"
                     : backend === "down"
-                      ? "bg-[var(--tv-flag)]"
-                      : "bg-[var(--tv-muted)]"
+                      ? "bg-rose-400"
+                      : "bg-[#EFE5CE]/60"
                 }`}
               />
             </span>
@@ -321,130 +439,178 @@ export default function DashboardPage() {
             {backend === "up" && "Backend connected"}
             {backend === "down" && "Can't reach the backend. Start it with npm start."}
           </p>
-        </div>
+        </motion.div>
 
-        {/* Card 2: 3-Color Sweeping Donut + Growing Bars */}
-        <div
-          style={{ animationDelay: "90ms" }}
-          className="animate-pop-in flex flex-col-reverse gap-4 rounded-2xl border border-[var(--tv-line)] bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
+        {/* Card 2 (5 cols): Interactive Risk Breakdown + Reactive Donut */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.08, ease: EDITORIAL_EASE }}
+          whileHover={{ y: -4 }}
+          className="flex flex-col-reverse gap-5 rounded-2xl border border-[var(--tv-line)] bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-md sm:flex-row sm:items-center sm:justify-between lg:col-span-5"
         >
-          <div className="w-full flex-1 space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
-              Risk breakdown
-            </span>
+          <div className="w-full flex-1 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
+                Risk breakdown
+              </span>
+              <span className="text-[11px] text-[var(--tv-muted)]">Hover to inspect</span>
+            </div>
 
             <div className="space-y-1.5 text-xs font-semibold">
-              <div>
-                <div className="flex justify-between text-[#9b1c13]">
-                  <span>High risk</span>
-                  <span className="tabular-nums">{queue ? animatedHigh : "-"}</span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#f9ddd9]">
+              {riskRows.map((row) => {
+                const isHovered = hoveredRisk === row.key;
+                const isDimmed = hoveredRisk !== null && !isHovered;
+                return (
                   <div
-                    className="h-full rounded-full bg-[#9b1c13] transition-all duration-1000 ease-out"
-                    style={{ width: ringReady ? `${(highCount / total) * 100}%` : "0%" }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-[#7a4b00]">
-                  <span>Medium risk</span>
-                  <span className="tabular-nums">{queue ? animatedMed : "-"}</span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#f6e7c8]">
-                  <div
-                    className="h-full rounded-full bg-[#c98000] transition-all duration-1000 ease-out"
-                    style={{ width: ringReady ? `${(medCount / total) * 100}%` : "0%" }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-[#1f6b3a]">
-                  <span>Low risk</span>
-                  <span className="tabular-nums">{queue ? animatedLow : "-"}</span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#ddebdd]">
-                  <div
-                    className="h-full rounded-full bg-[#1f6b3a] transition-all duration-1000 ease-out"
-                    style={{ width: ringReady ? `${(lowCount / total) * 100}%` : "0%" }}
-                  />
-                </div>
-              </div>
+                    key={row.key}
+                    onMouseEnter={() => setHoveredRisk(row.key)}
+                    onMouseLeave={() => setHoveredRisk(null)}
+                    className={`cursor-default rounded-lg px-2 py-1.5 transition-all duration-200 ${
+                      isHovered
+                        ? "bg-[var(--tv-paper)] ring-1 ring-[var(--tv-champagne)]"
+                        : isDimmed
+                          ? "opacity-55"
+                          : ""
+                    }`}
+                  >
+                    <div className={`flex justify-between ${row.textClass}`}>
+                      <span>{row.label}</span>
+                      <span className="tabular-nums">{queue ? row.animated : "-"}</span>
+                    </div>
+                    <div className={`mt-1 h-1.5 overflow-hidden rounded-full ${row.trackClass}`}>
+                      <motion.div
+                        initial={{ width: "0%" }}
+                        animate={{
+                          width: ringReady ? `${(row.count / total) * 100}%` : "0%",
+                        }}
+                        transition={{ duration: 0.85, ease: EDITORIAL_EASE }}
+                        className={`h-full rounded-full ${row.fillClass}`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <svg className="h-24 w-24 shrink-0 self-center" viewBox="0 0 36 36" aria-hidden="true">
-            <circle cx="18" cy="18" r="15.5" fill="none" stroke="#efe8dc" strokeWidth="3.8" />
-            <circle
-              cx="18"
-              cy="18"
-              r="15.5"
-              fill="none"
-              stroke="#9b1c13"
-              strokeWidth="3.8"
-              strokeLinecap="round"
-              strokeDasharray={`${ringReady && queue ? highLen : 0} ${C}`}
-              style={{ transform: `rotate(${highDeg}deg)`, transformOrigin: "50% 50%" }}
-              className="transition-[stroke-dasharray] duration-1000 ease-out"
-            />
-            <circle
-              cx="18"
-              cy="18"
-              r="15.5"
-              fill="none"
-              stroke="#c98000"
-              strokeWidth="3.8"
-              strokeLinecap="round"
-              strokeDasharray={`${ringReady && queue ? medLen : 0} ${C}`}
-              style={{ transform: `rotate(${medDeg}deg)`, transformOrigin: "50% 50%" }}
-              className="transition-[stroke-dasharray] duration-1000 ease-out"
-            />
-            <circle
-              cx="18"
-              cy="18"
-              r="15.5"
-              fill="none"
-              stroke="#1f6b3a"
-              strokeWidth="3.8"
-              strokeLinecap="round"
-              strokeDasharray={`${ringReady && queue ? lowLen : 0} ${C}`}
-              style={{ transform: `rotate(${lowDeg}deg)`, transformOrigin: "50% 50%" }}
-              className="transition-[stroke-dasharray] duration-1000 ease-out"
-            />
-          </svg>
-        </div>
+          {/* Reactive SVG Donut */}
+          <div className="relative flex h-28 w-28 shrink-0 items-center justify-center self-center">
+            <svg className="h-full w-full" viewBox="0 0 36 36" aria-hidden="true">
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#efe8dc" strokeWidth="3.6" />
+              <circle
+                cx="18"
+                cy="18"
+                r="15.5"
+                fill="none"
+                stroke="#9b1c13"
+                strokeWidth={hoveredRisk === "HIGH" ? 5 : 3.8}
+                strokeLinecap="round"
+                strokeDasharray={`${ringReady && queue ? highLen : 0} ${C}`}
+                style={{
+                  transform: `rotate(${highDeg}deg)`,
+                  transformOrigin: "50% 50%",
+                  opacity: hoveredRisk && hoveredRisk !== "HIGH" ? 0.25 : 1,
+                }}
+                className="transition-all duration-300 ease-out"
+              />
+              <circle
+                cx="18"
+                cy="18"
+                r="15.5"
+                fill="none"
+                stroke="#c98000"
+                strokeWidth={hoveredRisk === "MEDIUM" ? 5 : 3.8}
+                strokeLinecap="round"
+                strokeDasharray={`${ringReady && queue ? medLen : 0} ${C}`}
+                style={{
+                  transform: `rotate(${medDeg}deg)`,
+                  transformOrigin: "50% 50%",
+                  opacity: hoveredRisk && hoveredRisk !== "MEDIUM" ? 0.25 : 1,
+                }}
+                className="transition-all duration-300 ease-out"
+              />
+              <circle
+                cx="18"
+                cy="18"
+                r="15.5"
+                fill="none"
+                stroke="#1f6b3a"
+                strokeWidth={hoveredRisk === "LOW" ? 5 : 3.8}
+                strokeLinecap="round"
+                strokeDasharray={`${ringReady && queue ? lowLen : 0} ${C}`}
+                style={{
+                  transform: `rotate(${lowDeg}deg)`,
+                  transformOrigin: "50% 50%",
+                  opacity: hoveredRisk && hoveredRisk !== "LOW" ? 0.25 : 1,
+                }}
+                className="transition-all duration-300 ease-out"
+              />
+            </svg>
 
-        {/* Card 3: Workflow Promise */}
-        <div
-          style={{ animationDelay: "180ms" }}
-          className="animate-pop-in rounded-2xl border border-[var(--tv-champagne)] bg-gradient-to-br from-[#fbf7f0] to-[#f4ead9] p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={hoveredRisk ?? "ALL"}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.16 }}
+                >
+                  <span className="block font-serif text-xl font-semibold leading-none tabular-nums text-[var(--tv-ink)]">
+                    {queue ? donutCenterValue : "-"}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-wider text-[var(--tv-muted)]">
+                    {donutCenterLabel}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Card 3 (3 cols): Interactive Workflow Promise */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.16, ease: EDITORIAL_EASE }}
+          whileHover={{ y: -4 }}
+          onMouseEnter={() => setStepHovered(true)}
+          onMouseLeave={() => setStepHovered(false)}
+          className="flex flex-col justify-between rounded-2xl border border-[var(--tv-champagne)] bg-gradient-to-br from-[#fbf7f0] to-[#f4ead9] p-5 shadow-sm transition-shadow duration-300 hover:shadow-md lg:col-span-3"
         >
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-brand)]">
             How TrueVoice checks
           </span>
-          <ol className="mt-3 space-y-1.5 text-xs font-medium text-[var(--tv-ink)]">
-            <li className="flex items-center gap-2">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--tv-brand)] text-[10px] text-white">
-                1
-              </span>
-              Exact-match rules run first
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--tv-brand)] text-[10px] text-white">
-                2
-              </span>
-              AI checks tone &amp; cites approved source
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--tv-ok)] text-[10px] text-white">
-                3
-              </span>
-              Human reviewer makes final call
-            </li>
+          <ol className="mt-3 space-y-2 text-xs font-medium text-[var(--tv-ink)]">
+            {checkSteps.map((step, idx) => {
+              const Icon = step.icon;
+              const isCurrent = activeCheckStep === idx;
+              const badgeColor =
+                step.accent === "ok" ? "bg-[var(--tv-ok)]" : "bg-[var(--tv-brand)]";
+              return (
+                <li
+                  key={step.num}
+                  onMouseEnter={() => setActiveCheckStep(idx)}
+                  className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-all duration-300 ${
+                    isCurrent
+                      ? "bg-white/85 shadow-xs ring-1 ring-[var(--tv-champagne)]"
+                      : "opacity-80"
+                  }`}
+                >
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] text-white transition-transform duration-300 ${badgeColor} ${
+                      isCurrent ? "scale-110" : ""
+                    }`}
+                  >
+                    <Icon className="h-3 w-3" />
+                  </span>
+                  <span className="leading-snug">{step.label}</span>
+                </li>
+              );
+            })}
           </ol>
-        </div>
+        </motion.div>
       </div>
 
       <StaleFactAlerts />
@@ -459,17 +625,18 @@ export default function DashboardPage() {
                 Click any draft row to inspect stage progress.
               </p>
             </div>
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.95 }}
               onClick={() => setHighRiskFirst((v) => !v)}
-              className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 ${
+              className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors duration-200 ${
                 highRiskFirst
                   ? "border-[var(--tv-brand)] bg-[var(--tv-brand)] text-white shadow-xs"
                   : "border-[var(--tv-line)] bg-white text-[var(--tv-brand)] hover:bg-[var(--tv-paper)]"
               }`}
             >
               Filter: {highRiskFirst ? "High risk first" : "Original order"}
-            </button>
+            </motion.button>
           </div>
 
           {queue === null && <p className="mt-4 text-[var(--tv-muted)]">Loading the queue…</p>}
@@ -487,7 +654,7 @@ export default function DashboardPage() {
           )}
 
           {drafts.length > 0 && (
-            <ul className="mt-4 divide-y divide-[var(--tv-line)] rounded-2xl border border-[var(--tv-line)] bg-white shadow-sm">
+            <ul className="mt-4 divide-y divide-[var(--tv-line)] overflow-hidden rounded-2xl border border-[var(--tv-line)] bg-white shadow-sm">
               {drafts.map((d, idx) => {
                 const risk = (d.risk_level ?? "").toUpperCase();
                 const findings = d.total_findings ?? 0;
@@ -509,10 +676,17 @@ export default function DashboardPage() {
                       : statusLabel(effectiveStatus);
 
                 return (
-                  <li
+                  <motion.li
                     key={d.id}
-                    style={{ animationDelay: `${idx * 85}ms` }}
-                    className="animate-pop-in px-4 py-4 transition-colors duration-200 hover:bg-[#fcf9f3] sm:px-5"
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      layout: { duration: 0.3, ease: EDITORIAL_EASE },
+                      opacity: { duration: 0.3, delay: idx * 0.05 },
+                      y: { duration: 0.3, delay: idx * 0.05, ease: EDITORIAL_EASE },
+                    }}
+                    className="px-4 py-4 transition-colors duration-200 hover:bg-[#fcf9f3] sm:px-5"
                   >
                     <div className="flex flex-wrap items-center gap-3">
                       <button
@@ -521,17 +695,11 @@ export default function DashboardPage() {
                         onClick={() => setExpandedId(isOpen ? null : d.id)}
                         className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
-                        <svg
+                        <ChevronDown
                           className={`h-4 w-4 shrink-0 text-[var(--tv-muted)] transition-transform duration-300 ${
                             isOpen ? "rotate-180 text-[var(--tv-brand)]" : ""
                           }`}
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium">{d.title ?? d.id}</p>
                           <p className="text-sm text-[var(--tv-muted)]">
@@ -585,76 +753,83 @@ export default function DashboardPage() {
                         className="group inline-flex items-center gap-1 rounded-lg border border-[var(--tv-edge)] px-3 py-1.5 text-sm font-medium transition-all hover:border-[var(--tv-brand)] hover:bg-[var(--tv-paper)] active:scale-95"
                       >
                         <span>Open</span>
-                        <span className="transition-transform duration-200 group-hover:translate-x-0.5">
-                          &rarr;
-                        </span>
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
                       </Link>
                     </div>
 
-                    {/* Smooth CSS Grid Accordion Drawer with Animated Progress Track */}
-                    <div
-                      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
-                        isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-                      }`}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="mt-3 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] px-3 py-3 text-xs sm:ml-7 sm:px-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-semibold text-[var(--tv-muted)]">Workflow:</span>
-                              {(["Creator", "Reviewer", "Approved"] as const).map((s, i) => (
-                                <span key={s} className="flex items-center gap-1.5">
-                                  <span
-                                    className={`rounded-full px-2.5 py-0.5 font-semibold transition-all duration-300 ${
-                                      i <= activeStage
-                                        ? "bg-[var(--tv-brand)] text-white shadow-xs"
-                                        : "bg-white text-[var(--tv-muted)]"
-                                    }`}
-                                  >
-                                    {s}
+                    {/* Smooth Framer Motion Accordion Drawer with Animated Progress Track */}
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          key="drawer"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.28, ease: EDITORIAL_EASE }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-3 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)] px-3 py-3 text-xs sm:ml-7 sm:px-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-[var(--tv-muted)]">Workflow:</span>
+                                {(["Creator", "Reviewer", "Approved"] as const).map((s, i) => (
+                                  <span key={s} className="flex items-center gap-1.5">
+                                    <span
+                                      className={`rounded-full px-2.5 py-0.5 font-semibold transition-all duration-300 ${
+                                        i <= activeStage
+                                          ? "bg-[var(--tv-brand)] text-white shadow-xs"
+                                          : "bg-white text-[var(--tv-muted)]"
+                                      }`}
+                                    >
+                                      {s}
+                                    </span>
+                                    {i < 2 && <span className="text-[var(--tv-muted)]">&rarr;</span>}
                                   </span>
-                                  {i < 2 && <span className="text-[var(--tv-muted)]">&rarr;</span>}
-                                </span>
-                              ))}
+                                ))}
+                              </div>
+                              <Link
+                                href="/dashboard/review"
+                                className="font-semibold text-[var(--tv-brand)] underline"
+                              >
+                                Inspect findings &rarr;
+                              </Link>
                             </div>
-                            <Link
-                              href="/dashboard/review"
-                              className="font-semibold text-[var(--tv-brand)] underline"
-                            >
-                              Inspect findings &rarr;
-                            </Link>
-                          </div>
 
-                          {/* Animated stage progress bar */}
-                          <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[#e6dccb]">
-                            <div
-                              className="h-full rounded-full bg-[var(--tv-brand)] transition-all duration-500 ease-out"
-                              style={{ width: `${((activeStage + 1) / 3) * 100}%` }}
-                            />
-                          </div>
+                            {/* Animated stage progress bar */}
+                            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[#e6dccb]">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${((activeStage + 1) / 3) * 100}%` }}
+                                transition={{ duration: 0.5, ease: EDITORIAL_EASE }}
+                                className="h-full rounded-full bg-[var(--tv-brand)]"
+                              />
+                            </div>
 
-                          {/* Latest Reviewer Note */}
-                          {reviewerNote && (reviewerNote.details || reviewerNote.action === "CHANGES_REQUESTED") && (
-                            <p
-                              className={`mt-2.5 rounded-lg px-3 py-2 text-xs ${
-                                reviewerNote.action === "CHANGES_REQUESTED"
-                                  ? "bg-[#f9ddd9] text-[#9b1c13]"
-                                  : "bg-[#ddebdd] text-[#1f6b3a]"
-                              }`}
-                            >
-                              <strong>
-                                {reviewerNote.action === "CHANGES_REQUESTED"
-                                  ? "Changes requested"
-                                  : "Reviewer note"}{" "}
-                                ({reviewerNote.actor_name}):
-                              </strong>{" "}
-                              {reviewerNote.details || "Please review and update this draft."}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </li>
+                            {/* Latest Reviewer Note */}
+                            {reviewerNote &&
+                              (reviewerNote.details ||
+                                reviewerNote.action === "CHANGES_REQUESTED") && (
+                                <p
+                                  className={`mt-2.5 rounded-lg px-3 py-2 text-xs ${
+                                    reviewerNote.action === "CHANGES_REQUESTED"
+                                      ? "bg-[#f9ddd9] text-[#9b1c13]"
+                                      : "bg-[#ddebdd] text-[#1f6b3a]"
+                                  }`}
+                                >
+                                  <strong>
+                                    {reviewerNote.action === "CHANGES_REQUESTED"
+                                      ? "Changes requested"
+                                      : "Reviewer note"}{" "}
+                                    ({reviewerNote.actor_name}):
+                                  </strong>{" "}
+                                  {reviewerNote.details || "Please review and update this draft."}
+                                </p>
+                              )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.li>
                 );
               })}
             </ul>
@@ -662,31 +837,42 @@ export default function DashboardPage() {
         </section>
 
         {/* Live Auto-Scanning Finding Preview */}
-        <aside
+        <motion.aside
           aria-label="Example finding"
-          style={{ animationDelay: "220ms" }}
-          className="animate-pop-in relative self-start overflow-hidden rounded-2xl border-2 border-[var(--tv-champagne)] bg-white p-4 shadow-sm sm:p-5"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.2, ease: EDITORIAL_EASE }}
+          className="relative self-start overflow-hidden rounded-2xl border-2 border-[var(--tv-champagne)] bg-white p-4 shadow-sm sm:p-5"
         >
-          {/* Sweeping Gold Scanner Beam during scanning phase */}
-          {demoPhase === "scanning" && (
-            <div
-              aria-hidden="true"
-              className="animate-scan-sweep pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-[var(--tv-champagne)]/40 to-transparent"
-            />
-          )}
+          {/* Sweeping Champagne Scanner Beam during scanning phase */}
+          <AnimatePresence>
+            {demoPhase === "scanning" && (
+              <motion.div
+                key="scanner"
+                aria-hidden="true"
+                initial={{ x: "-100%", opacity: 0 }}
+                animate={{ x: "220%", opacity: [0, 1, 1, 0] }}
+                exit={{ opacity: 0 }}
+                transition={{ repeat: Infinity, duration: 1.3, ease: "easeInOut" }}
+                className="pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-[var(--tv-champagne)]/45 to-transparent"
+              />
+            )}
+          </AnimatePresence>
 
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-semibold sm:text-xl">How a finding looks</h2>
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.94 }}
               onClick={() => {
                 setAutoDemo((v) => !v);
                 setDemoPhase("scanning");
               }}
-              className="rounded-full border border-[var(--tv-champagne)] bg-[var(--tv-paper)] px-2.5 py-1 text-xs font-semibold text-[var(--tv-brand)] transition hover:bg-[var(--tv-champagne)]/40"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--tv-champagne)] bg-[var(--tv-paper)] px-2.5 py-1 text-xs font-semibold text-[var(--tv-brand)] transition hover:bg-[var(--tv-champagne)]/40"
             >
+              {autoDemo ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
               {autoDemo ? "Pause demo" : "Replay demo"}
-            </button>
+            </motion.button>
           </div>
 
           <div className="mt-3 flex items-center gap-2 text-xs font-semibold">
@@ -699,11 +885,20 @@ export default function DashboardPage() {
                     : "bg-[var(--tv-ok)]"
               }`}
             />
-            <span className="text-[var(--tv-muted)]">
-              {demoPhase === "scanning" && "Scanning draft against approved rules…"}
-              {demoPhase === "flagged" && "Mismatch caught against offer sheet"}
-              {demoPhase === "fixed" && "Creator accepted approved fix"}
-            </span>
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={demoPhase}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2 }}
+                className="text-[var(--tv-muted)]"
+              >
+                {demoPhase === "scanning" && "Scanning draft against approved rules…"}
+                {demoPhase === "flagged" && "Mismatch caught against offer sheet"}
+                {demoPhase === "fixed" && "Creator accepted approved fix"}
+              </motion.span>
+            </AnimatePresence>
           </div>
 
           <p className="mt-3 text-sm text-[var(--tv-muted)]">Draft</p>
@@ -718,28 +913,36 @@ export default function DashboardPage() {
             >
               flat 30% off
             </span>
-            {demoPhase === "fixed" && (
-              <span className="animate-pop-in ml-1.5 inline-block rounded bg-[#ddebdd] px-1.5 py-0.5 font-semibold text-[#1f6b3a]">
-                Flat 20% off
-              </span>
-            )}
+            <AnimatePresence>
+              {demoPhase === "fixed" && (
+                <motion.span
+                  initial={{ opacity: 0, scale: 0.85, x: -4 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.85 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                  className="ml-1.5 inline-block rounded bg-[#ddebdd] px-1.5 py-0.5 font-semibold text-[#1f6b3a]"
+                >
+                  Flat 20% off
+                </motion.span>
+              )}
+            </AnimatePresence>
             !
           </p>
 
-          <div
-            className={`mt-4 transition-all duration-300 ${
-              demoPhase === "scanning" ? "opacity-40" : "opacity-100"
-            }`}
+          <motion.div
+            animate={{ opacity: demoPhase === "scanning" ? 0.45 : 1 }}
+            transition={{ duration: 0.3 }}
+            className="mt-4"
           >
             <p className="font-semibold text-[var(--tv-flag)]">Offer doesn&rsquo;t match</p>
             <p className="mt-1 text-sm">
               Source: approved offer sheet says 20% off, valid 20&ndash;30 Nov 2026.
             </p>
             <p className="mt-1 text-sm">Suggested fix: &ldquo;Flat 20% off.&rdquo;</p>
-          </div>
+          </motion.div>
 
           <p className="mt-4 text-xs text-[var(--tv-muted)]">Live interactive demo</p>
-        </aside>
+        </motion.aside>
       </div>
     </div>
   );
