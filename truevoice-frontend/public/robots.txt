@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /discover.html
+Allow: /verify/
+Disallow: /dashboard
+Disallow: /login
+Disallow: /signup
+Disallow: /backend/
+Disallow: /api/
+
+Sitemap: https://truevoice-devvibe.vercel.app/sitemap.xml
