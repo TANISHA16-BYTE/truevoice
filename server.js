@@ -161,6 +161,7 @@ const server = http.createServer(async (req, res) => {
       pathname === "/api/clash/posts" ||
       pathname === "/api/ai-mistakes" ||
       pathname === "/api/audit-logs/export" ||
+      pathname === "/api/library/import-pdf" ||
       (pathname.startsWith("/api/library/") && method === "PATCH");
 
     if (protectedPath && !currentUser) {
@@ -262,6 +263,10 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------------
     if (pathname === "/api/library" && method === "GET") {
       const resp = await libraryCtrl.getUnifiedLibrary();
+      return sendJson(res, resp.status, resp.data);
+    }
+    if (pathname === "/api/library/import-pdf" && method === "POST") {
+      const resp = await uploadCtrl.handleBrandGuideImport(body, currentUser);
       return sendJson(res, resp.status, resp.data);
     }
     const patchLibraryMatch = pathname.match(/^\/api\/library\/([^/]+)$/);
