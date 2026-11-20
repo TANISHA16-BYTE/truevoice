@@ -597,8 +597,54 @@ async function runApiTests() {
     }
     console.log("  -> Passed. Reviewer correction was saved and retrieved.");
 
+
+    console.log("\n[TEST 33] Brand Guide Import — role guard and checklist extraction");
+    const creatorImportDenied = await invokeRoute(
+      "POST",
+      "/api/library/import-pdf",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + creatorToken
+      },
+      {
+        filename: "brand_update.md",
+        content: "Banned: miracle -> effective (Avoid hype)"
+      }
+    );
+    if (creatorImportDenied.status !== 403) {
+      throw new Error("Expected 403 for creator on /api/library/import-pdf, got " + creatorImportDenied.status);
+    }
+
+    const sampleGuide = [
+      "GlowMist (GV-MIST-50) Price: ₹649",
+      "Offer GLOW25: 25% off GlowMist (2026-11-20 to 2026-12-20)",
+      "Approved claim: Alcohol-free soothing mist",
+      "Banned: age-reversal -> skin-refreshing (Cosmetic boundary)",
+      "Key Ingredient: Rosewater & Niacinamide"
+    ].join("\n");
+    const reviewerImport = await invokeRoute(
+      "POST",
+      "/api/library/import-pdf",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + reviewerToken
+      },
+      {
+        filename: "q4_brand_update.md",
+        file_base64: Buffer.from(sampleGuide, "utf8").toString("base64")
+      }
+    );
+    if (
+      reviewerImport.status !== 200 ||
+      !Array.isArray(reviewerImport.data.items) ||
+      reviewerImport.data.items.length < 4
+    ) {
+      throw new Error("Expected reviewer brand guide import to extract >= 4 items, got " + JSON.stringify(reviewerImport.data));
+    }
+    console.log("  -> Passed. Role guard (403) & checklist extraction (" + reviewerImport.data.items.length + " items) succeeded.");
+
     console.log("\n=======================================================");
-    console.log("   ALL 32 INTEGRATION TESTS PASSED");
+    console.log("   ALL 33 INTEGRATION TESTS PASSED");
     console.log("=======================================================\n");
 
     process.exit(0);
