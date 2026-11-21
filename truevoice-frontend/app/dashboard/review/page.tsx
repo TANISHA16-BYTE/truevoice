@@ -8,8 +8,11 @@ import {
   Check,
   CheckCircle2,
   Eye,
+  FileJson,
+  FileSpreadsheet,
   FileText,
   History,
+  Loader2,
   Lock,
   MessageSquareWarning,
   ShieldAlert,
@@ -204,7 +207,7 @@ function segmentDraftText(content: string, findings: DraftFinding[]): TextSegmen
 }
 
 export default function ReviewPage() {
-  const { user } = useSession();
+  const { token, user } = useSession();
   const isReviewer = ["reviewer", "admin"].includes((user.role ?? "").toLowerCase());
   const detailRef = useRef<HTMLElement | null>(null);
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
@@ -222,6 +225,9 @@ export default function ReviewPage() {
   const [dismissReasons, setDismissReasons] = useState<Record<string, string>>({});
   const [dismissErrors, setDismissErrors] = useState<Record<string, string>>({});
   const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<"csv" | "json" | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -367,6 +373,49 @@ export default function ReviewPage() {
     }
   }
 
+  async function handleAuditExport(format: "csv" | "json") {
+    setExportingFormat(format);
+    setExportNotice(null);
+    setExportError(null);
+    try {
+      const res = await fetch(`/backend/audit-logs/export?format=${format}`, {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        let msg = `Could not export ${format.toUpperCase()} audit log (error ${res.status}).`;
+        try {
+          const data = (await res.json()) as { error?: string; message?: string };
+          if (data?.error || data?.message) msg = data.error || data.message || msg;
+        } catch {
+          /* ignore non-JSON error */
+        }
+        throw new Error(msg);
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+      const filename =
+        filenameMatch?.[1] || `truevoice_audit_log_${new Date().toISOString().slice(0, 10)}.${format}`;
+
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+
+      setExportNotice(`✓ Downloaded ${filename}`);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Could not export audit log.");
+    } finally {
+      setExportingFormat(null);
+    }
+  }
+
   const activeDraft = detail?.draft ?? selected;
   const badge = detail?.approval_badge;
   const activeStage = stageIndex(
@@ -395,7 +444,39 @@ export default function ReviewPage() {
           </p>
         </div>
 
-        <div className="grid w-full grid-cols-4 rounded-full border border-[var(--tv-champagne)] bg-white p-1 shadow-xs sm:w-auto">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2.5 sm:w-auto">
+          {isReviewer && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={exportingFormat !== null}
+                onClick={() => handleAuditExport("csv")}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--tv-champagne)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--tv-ink)] shadow-xs transition hover:bg-[var(--tv-paper)] disabled:opacity-60"
+              >
+                {exportingFormat === "csv" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--tv-brand)]" />
+                ) : (
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--tv-brand)]" />
+                )}
+                <span>Export Audit CSV</span>
+              </button>
+              <button
+                type="button"
+                disabled={exportingFormat !== null}
+                onClick={() => handleAuditExport("json")}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--tv-champagne)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--tv-ink)] shadow-xs transition hover:bg-[var(--tv-paper)] disabled:opacity-60"
+              >
+                {exportingFormat === "json" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--tv-brand)]" />
+                ) : (
+                  <FileJson className="h-3.5 w-3.5 text-[var(--tv-brand)]" />
+                )}
+                <span>Export Audit JSON</span>
+              </button>
+            </div>
+          )}
+
+          <div className="grid w-full grid-cols-4 rounded-full border border-[var(--tv-champagne)] bg-white p-1 shadow-xs sm:w-auto">
           {FILTERS.map((f) => {
             const active = filter === f.key;
             return (
@@ -418,8 +499,22 @@ export default function ReviewPage() {
               </button>
             );
           })}
+          </div>
         </div>
       </motion.div>
+
+      {(exportNotice || exportError) && (
+        <div
+          role={exportError ? "alert" : "status"}
+          className={`rounded-xl border px-4 py-2.5 text-xs font-medium ${
+            exportError
+              ? "border-[#9b1c13]/30 bg-[#f9ddd9]/70 text-[#9b1c13]"
+              : "border-[#1f6b3a]/30 bg-[#ddebdd]/70 text-[#1f6b3a]"
+          }`}
+        >
+          {exportError || exportNotice}
+        </div>
+      )}
 
       {!isReviewer && (
         <div

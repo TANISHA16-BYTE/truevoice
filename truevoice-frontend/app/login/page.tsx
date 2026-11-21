@@ -168,6 +168,12 @@ export default function LoginPage() {
             Sign up
           </Link>
         </p>
+        <p className="mt-2 text-center text-xs text-white/65">
+          Checking a published post?{" "}
+          <Link href="/verify" className="font-semibold text-[#d9bc98] underline hover:text-[#e8d4b7]">
+            Verify an approval badge
+          </Link>
+        </p>
       </section>
     </main>
   );
