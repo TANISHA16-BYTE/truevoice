@@ -309,6 +309,9 @@ export default function ReviewPage() {
 
   async function recordDecision(action: "approved" | "changes_requested") {
     if (!selected || !isReviewer) return;
+    const wasApproved =
+      getStatusBucket(selected.status) === "APPROVED" ||
+      Boolean(detail?.approval_badge?.badge_code);
     setSubmitting(true);
     setDecisionMsg(null);
     try {
@@ -324,8 +327,11 @@ export default function ReviewPage() {
       );
 
       const refreshed = await api<DraftDetail>(`/drafts/${selected.id}`);
-      if (res?.badge?.badge_code && !refreshed.approval_badge) {
+      if (action === "approved" && res?.badge?.badge_code && !refreshed.approval_badge) {
         refreshed.approval_badge = res.badge;
+      }
+      if (action === "changes_requested") {
+        refreshed.approval_badge = null;
       }
       if (refreshed.draft) {
         refreshed.draft = { ...refreshed.draft, status: action };
@@ -334,7 +340,9 @@ export default function ReviewPage() {
       setDecisionMsg(
         action === "approved"
           ? "✓ Draft approved and Proof-of-Approval badge generated."
-          : "Changes requested and saved to history."
+          : wasApproved
+            ? "Approval revoked, old badge invalidated, and changes requested."
+            : "Changes requested and saved to history."
       );
     } catch (err) {
       setDecisionMsg(err instanceof Error ? err.message : "Could not record decision.");
@@ -1081,14 +1089,18 @@ export default function ReviewPage() {
                         <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
                           <motion.button
                             type="button"
-                            whileHover={!submitting ? { y: -1 } : undefined}
-                            whileTap={!submitting ? { scale: 0.97 } : undefined}
-                            disabled={submitting}
+                            whileHover={!submitting && !badge?.badge_code && getStatusBucket(activeDraft.status) !== "APPROVED" ? { y: -1 } : undefined}
+                            whileTap={!submitting && !badge?.badge_code && getStatusBucket(activeDraft.status) !== "APPROVED" ? { scale: 0.97 } : undefined}
+                            disabled={submitting || Boolean(badge?.badge_code) || getStatusBucket(activeDraft.status) === "APPROVED"}
                             onClick={() => recordDecision("approved")}
-                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1f6b3a] px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-[#17522c] disabled:opacity-60 sm:w-auto sm:py-2"
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1f6b3a] px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-[#17522c] disabled:cursor-not-allowed disabled:opacity-55 sm:w-auto sm:py-2"
                           >
                             <Check className="h-4 w-4" />
-                            <span>Approve draft</span>
+                            <span>
+                              {badge?.badge_code || getStatusBucket(activeDraft.status) === "APPROVED"
+                                ? "Approved"
+                                : "Approve draft"}
+                            </span>
                           </motion.button>
                           <motion.button
                             type="button"
@@ -1096,10 +1108,18 @@ export default function ReviewPage() {
                             whileTap={!submitting ? { scale: 0.97 } : undefined}
                             disabled={submitting}
                             onClick={() => recordDecision("changes_requested")}
-                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--tv-brand)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--tv-brand)] transition hover:bg-[var(--tv-paper)] disabled:opacity-60 sm:w-auto sm:py-2"
+                            className={`inline-flex w-full items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-semibold transition disabled:opacity-60 sm:w-auto sm:py-2 ${
+                              badge?.badge_code || getStatusBucket(activeDraft.status) === "APPROVED"
+                                ? "border-[#9b1c13]/40 bg-[#f9ddd9]/55 text-[#9b1c13] hover:bg-[#f9ddd9]"
+                                : "border-[var(--tv-brand)] bg-white text-[var(--tv-brand)] hover:bg-[var(--tv-paper)]"
+                            }`}
                           >
                             <Sparkles className="h-4 w-4" />
-                            <span>Request changes</span>
+                            <span>
+                              {badge?.badge_code || getStatusBucket(activeDraft.status) === "APPROVED"
+                                ? "Revoke approval & request changes"
+                                : "Request changes"}
+                            </span>
                           </motion.button>
                         </div>
 
