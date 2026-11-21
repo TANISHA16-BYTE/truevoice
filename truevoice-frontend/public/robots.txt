@@ -6,5 +6,3 @@ Disallow: /login
 Disallow: /signup
 Disallow: /backend/
 Disallow: /api/
-
-Sitemap: https://www.thetruevoice.xyz/sitemap.xml

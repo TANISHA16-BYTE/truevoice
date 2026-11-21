@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// The dashboard sends people to /login if they are not signed in.
+// Keep the public product overview as the entry point for visitors and search engines.
 export default function Home() {
-  redirect("/dashboard");
+  redirect("/discover.html");
 }
