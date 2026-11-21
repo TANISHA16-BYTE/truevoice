@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   AlertCircle,
+  Brain,
   Check,
   Edit3,
   Loader2,
@@ -26,6 +27,19 @@ type RuleMetric = {
   override_rate_pct: number;
   is_unclear: boolean;
   suggested_action: string;
+};
+
+type LearnedMistake = {
+  id: string;
+  phrase: string;
+  region?: string | null;
+  incorrect_flag?: string | null;
+  user_correction: string;
+  created_at?: string;
+};
+
+type MistakesResponse = {
+  mistakes?: LearnedMistake[];
 };
 
 type HealthResponse = {
@@ -65,7 +79,9 @@ function useCountUp(target: number, enabled: boolean, duration = 900): number {
 export default function GuidelineHealthPage() {
   const { user } = useSession();
   const isAdmin = (user?.role ?? "").toLowerCase() === "admin";
+  const isReviewer = ["reviewer", "admin"].includes((user?.role ?? "").toLowerCase());
   const [data, setData] = useState<HealthResponse | null>(null);
+  const [mistakes, setMistakes] = useState<LearnedMistake[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingRef, setEditingRef] = useState<string | null>(null);
   const [draftWording, setDraftWording] = useState("");
@@ -85,10 +101,21 @@ export default function GuidelineHealthPage() {
           setError(err instanceof Error ? err.message : "Could not load Guideline Health Score.");
         }
       });
+    if (isReviewer) {
+      api<MistakesResponse>("/ai-mistakes")
+        .then((res) => {
+          if (!cancelled) {
+            setMistakes(Array.isArray(res?.mistakes) ? res.mistakes : []);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setMistakes([]);
+        });
+    }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isReviewer]);
 
   async function saveClearerWording(rule: RuleMetric) {
     if (!isAdmin) return;
@@ -485,6 +512,76 @@ export default function GuidelineHealthPage() {
           </motion.section>
         </div>
       )}
+
+      {/* Human-AI Continuous Learning Loop (GET /api/ai-mistakes) */}
+      <motion.section
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.18, ease: EDITORIAL_EASE }}
+        className="tv-surface rounded-3xl border border-[var(--tv-line)] bg-white p-5 sm:p-6"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--tv-paper)] text-[var(--tv-brand)]">
+              <Brain className="h-4.5 w-4.5" />
+            </span>
+            <div>
+              <h2 className="text-lg font-semibold sm:text-xl">Learned from human reviewers</h2>
+              <p className="text-xs text-[var(--tv-muted)]">
+                Regional slang and context exceptions saved via &ldquo;Report AI Mistake&rdquo; —
+                injected automatically into future checks with zero model retraining.
+              </p>
+            </div>
+          </div>
+          {isReviewer && mistakes && (
+            <span className="rounded-full bg-[var(--tv-paper)] px-3 py-1 text-xs font-semibold text-[var(--tv-brand)]">
+              {mistakes.length} {mistakes.length === 1 ? "correction" : "corrections"} active
+            </span>
+          )}
+        </div>
+
+        {!isReviewer ? (
+          <p className="mt-4 rounded-2xl border border-dashed border-[var(--tv-edge)] bg-[var(--tv-paper)]/50 p-4 text-xs text-[var(--tv-muted)]">
+            Sign in with a <strong>Reviewer</strong> or <strong>Admin</strong> account to inspect
+            and curate AI false-positive corrections.
+          </p>
+        ) : mistakes === null ? (
+          <div className="mt-4 h-20 animate-pulse rounded-2xl bg-[var(--tv-paper)]/60" />
+        ) : mistakes.length === 0 ? (
+          <p className="mt-4 rounded-2xl border border-dashed border-[var(--tv-edge)] bg-[var(--tv-paper)]/50 p-4 text-xs text-[var(--tv-muted)]">
+            No AI corrections recorded yet. Use <strong>Report AI Mistake</strong> on any draft
+            finding in Submit Draft to teach TrueVoice regional context.
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {mistakes.map((m) => (
+              <div
+                key={m.id}
+                className="rounded-2xl border border-[var(--tv-line)] bg-[var(--tv-paper)]/45 p-4 text-xs"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="rounded-md bg-white px-2.5 py-1 font-semibold text-[var(--tv-brand)] shadow-2xs">
+                    &ldquo;{m.phrase}&rdquo;
+                  </span>
+                  {m.region && (
+                    <span className="rounded-full bg-[#EFE5CE] px-2.5 py-0.5 text-[11px] font-medium text-[var(--tv-ink)]">
+                      {m.region}
+                    </span>
+                  )}
+                </div>
+                {m.incorrect_flag && (
+                  <p className="mt-2 text-[var(--tv-muted)]">
+                    <strong>Previously flagged as:</strong> {m.incorrect_flag}
+                  </p>
+                )}
+                <p className="mt-1.5 font-medium text-[#1f6b3a]">
+                  <strong>Reviewer rule:</strong> {m.user_correction}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.section>
     </div>
   );
 }
