@@ -17,6 +17,7 @@ import {
   MessageSquareWarning,
   ShieldAlert,
   Sparkles,
+  Pencil,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/SessionContext";
@@ -209,6 +210,7 @@ function segmentDraftText(content: string, findings: DraftFinding[]): TextSegmen
 export default function ReviewPage() {
   const { token, user } = useSession();
   const isReviewer = ["reviewer", "admin"].includes((user.role ?? "").toLowerCase());
+  const isCreator = (user.role ?? "").toLowerCase() === "creator";
   const detailRef = useRef<HTMLElement | null>(null);
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1116,13 +1118,31 @@ export default function ReviewPage() {
                         </AnimatePresence>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--tv-line)] bg-[#fcf9f3] p-4 text-xs text-[var(--tv-muted)]">
-                        <Lock className="h-4 w-4 shrink-0 text-[var(--tv-brand)]" />
-                        <span>
-                          Approval &amp; change-request controls are locked for{" "}
-                          <strong>{user.role}</strong> accounts. Sign in as a{" "}
-                          <strong>Reviewer</strong> to make a final decision.
-                        </span>
+                       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--tv-line)] bg-[#fcf9f3] p-4 text-xs text-[var(--tv-muted)]">
+                        <div className="flex items-center gap-2.5">
+                          <Lock className="h-4 w-4 shrink-0 text-[var(--tv-brand)]" />
+                          <span>
+                            Approval &amp; change-request controls are locked for{" "}
+                            <strong>{user.role}</strong> accounts. Sign in as a{" "}
+                            <strong>Reviewer</strong> to make a final decision.
+                          </span>
+                        </div>
+
+                        {isCreator &&
+                          !badge?.badge_code &&
+                          getStatusBucket(activeDraft.status) !== "APPROVED" && (
+                            <Link
+                              href={`/dashboard/submit?draftId=${encodeURIComponent(activeDraft.id)}`}
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--tv-brand)] px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-[var(--tv-brand-ink)]"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span>
+                                {getStatusBucket(activeDraft.status) === "CHANGES_REQUESTED"
+                                  ? "Edit & Resubmit Draft →"
+                                  : "Edit Draft →"}
+                              </span>
+                            </Link>
+                          )}
                       </div>
                     )}
 
