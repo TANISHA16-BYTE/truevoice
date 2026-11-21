@@ -1,11 +1,11 @@
 "use client";
 
-import Logo from "@/components/Logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Logo from "./Logo";
 import { useSession } from "@/lib/SessionContext";
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Library", href: "/dashboard/library" },
   { label: "Submit draft", href: "/dashboard/submit" },
@@ -16,14 +16,17 @@ const NAV_ITEMS = [
 export default function TopNav({ onLogout }: { onLogout: () => void }) {
   const pathname = usePathname();
   const { user } = useSession();
-
   const displayName = user?.name || "User";
   const displayRole = user?.role || "member";
+  const isAdmin = displayRole.toLowerCase() === "admin";
+  const navItems = isAdmin
+    ? [...BASE_NAV_ITEMS, { label: "Team", href: "/dashboard/team" }]
+    : BASE_NAV_ITEMS;
   const initial = (displayName.trim().charAt(0) || "U").toUpperCase();
 
   const activeIdx = Math.max(
     0,
-    NAV_ITEMS.findIndex((item) =>
+    navItems.findIndex((item) =>
       item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href)
     )
   );
@@ -38,24 +41,27 @@ export default function TopNav({ onLogout }: { onLogout: () => void }) {
           <Logo />
         </Link>
 
-        {/* Desktop navigation: the sliding pill (1024px and wider) */}
         <nav
           aria-label="Primary"
-          className="relative hidden grid-cols-5 rounded-full bg-black/25 p-1 lg:grid"
+          className="relative hidden rounded-full bg-black/25 p-1 lg:grid"
+          style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
         >
           <span
             aria-hidden="true"
-            className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/5)] rounded-full bg-[var(--tv-champagne)] shadow-sm transition-transform duration-300 ease-out motion-reduce:transition-none"
-            style={{ transform: `translateX(${activeIdx * 100}%)` }}
+            className="absolute inset-y-1 left-1 rounded-full bg-[var(--tv-champagne)] shadow-sm transition-transform duration-300 ease-out motion-reduce:transition-none"
+            style={{
+              width: `calc((100% - 0.5rem) / ${navItems.length})`,
+              transform: `translateX(${activeIdx * 100}%)`,
+            }}
           />
-          {NAV_ITEMS.map((item, idx) => {
+          {navItems.map((item, idx) => {
             const isActive = idx === activeIdx;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={`relative z-10 min-w-[96px] rounded-full px-3 py-1.5 text-center text-sm font-medium transition-colors duration-200 ${
+                className={`relative z-10 min-w-[88px] rounded-full px-3 py-1.5 text-center text-sm font-medium transition-colors duration-200 ${
                   isActive ? "text-[var(--tv-brand-ink)]" : "text-[var(--tv-paper)]/85 hover:text-white"
                 }`}
               >
@@ -88,10 +94,9 @@ export default function TopNav({ onLogout }: { onLogout: () => void }) {
         </div>
       </div>
 
-      {/* Phone and tablet navigation: a row of links that scrolls sideways (below 1024px) */}
       <nav aria-label="Primary" className="border-t border-white/10 lg:hidden">
         <ul className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden">
-          {NAV_ITEMS.map((item, idx) => {
+          {navItems.map((item, idx) => {
             const isActive = idx === activeIdx;
             return (
               <li key={item.href} className="shrink-0">

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion, MotionConfig } from "framer-motion";
 import TopNav from "@/components/TopNav";
 import { api, ApiError } from "@/lib/api";
-import { clearSession, getSession } from "@/lib/session";
+import { clearSession, getSession, saveSession, SESSION_EVENT } from "@/lib/session";
 import { SessionContext } from "@/lib/SessionContext";
 
 const SESSION_KEY = "truevoice_session";
@@ -13,7 +13,11 @@ const EDITORIAL_EASE = [0.22, 1, 0.36, 1] as const;
 
 function subscribeToSession(onChange: () => void) {
   window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
+  window.addEventListener(SESSION_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(SESSION_EVENT, onChange);
+  };
 }
 
 function getSessionSnapshot(): string | null {
@@ -46,12 +50,35 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       return;
     }
 
-    api("/auth/me").catch((err) => {
-      if (err instanceof ApiError && err.status === 401) {
-        clearSession();
-        router.replace("/login");
-      }
-    });
+    api<{ user?: { id?: string; name?: string; email?: string; role?: string } }>("/auth/me")
+      .then((res) => {
+        const fresh = res?.user;
+        if (!fresh) return;
+        const nextRole = fresh.role ?? session.user.role;
+        const nextName = fresh.name ?? session.user.name;
+        const nextId = fresh.id ?? session.user.id;
+        if (
+          nextRole !== session.user.role ||
+          nextName !== session.user.name ||
+          nextId !== session.user.id
+        ) {
+          saveSession({
+            token: session.token,
+            user: {
+              id: nextId,
+              name: nextName,
+              email: fresh.email ?? session.user.email,
+              role: nextRole,
+            },
+          });
+        }
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) {
+          clearSession();
+          router.replace("/login");
+        }
+      });
   }, [sessionRaw, session, router]);
 
   function handleLogout() {

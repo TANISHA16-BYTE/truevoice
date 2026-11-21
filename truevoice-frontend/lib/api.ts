@@ -70,6 +70,7 @@ function toUser(raw: unknown, fallbackEmail: string): User {
   const top = (raw && typeof raw === "object" ? raw : {}) as Json;
   const inner = (top.user && typeof top.user === "object" ? top.user : top) as Json;
   return {
+    id: inner.id ? String(inner.id) : undefined,
     name: String(inner.name ?? inner.full_name ?? fallbackEmail),
     email: String(inner.email ?? fallbackEmail),
     role: String(inner.role ?? "creator"),
