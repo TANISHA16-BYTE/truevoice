@@ -4,15 +4,15 @@ const { checkStaleSources } = require("../services/staleKnowledgeService");
 
 // The extra columns (owner, status, archived, last_checked) are added in src/db/database.js.
 
-// Only reviewers and admins may change the library.
-const EDITOR_ROLES = ["reviewer", "admin"];
+// Only admins may add, edit, archive, verify, or approve changes in the library.
+const EDITOR_ROLES = ["admin"];
 
 function requireEditor(user) {
   if (!user) {
     return { status: 401, data: { error: "Login required." } };
   }
   if (!EDITOR_ROLES.includes(user.role)) {
-    return { status: 403, data: { error: "Only reviewers and admins can change the library." } };
+    return { status: 403, data: { error: "Only admins can change the library." } };
   }
   return null;
 }

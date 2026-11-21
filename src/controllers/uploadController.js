@@ -881,8 +881,8 @@ async function handleBrandGuideImport(body, user) {
   if (!user) {
     return { status: 401, data: { error: "Login required." } };
   }
-  if (!["reviewer", "admin"].includes(user.role)) {
-    return { status: 403, data: { error: "Only reviewers and admins can import brand guides." } };
+  if (user.role !== "admin") {
+    return { status: 403, data: { error: "Only admins can import brand guides." } };
   }
 
   const filename = (body && body.filename ? String(body.filename) : "Brand_Guide.pdf").trim();
