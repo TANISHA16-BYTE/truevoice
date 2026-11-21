@@ -191,3 +191,44 @@ Built with **Next.js 16**, **React 19**, **TypeScript**, and **Tailwind CSS**:
 - **Database (Supabase PostgreSQL):** Run `src/db/supabase_migration.sql` in the Supabase SQL Editor to create all tables, foreign keys, and constraints. Use the **`migration/postgresql-supabase`** branch for PostgreSQL support (`npm install` installs `pg`, and `seed-postgres.js` seeds reference data without overwriting existing rows).
 - **Backend (Render):** Deploy the root project from `migration/postgresql-supabase` with `DATABASE_URL`, `DATABASE_SSL=true`, `JWT_SECRET` (32+ chars), `NODE_ENV=production`, `BASE_URL`, and `GEMINI_API_KEY`.
 - **Frontend (Vercel):** Deploy with **Root Directory** set to `truevoice-frontend` and environment variable `TRUEVOICE_BACKEND_URL` set to your Render backend URL.
+
+  ## Round 3 Updates & Key Improvements
+
+Round 3 upgrades TrueVoice from an initial compliance prototype into a production-ready, role-governed, multi-format ad review and verification platform.
+
+### 1. Multi-Format & Visual Ad Compliance Checking
+- **Multi-format uploads:** Supports pasted text as well as `.txt`, `.md`, `.docx`, `.pptx`, `.pdf`, and image creatives (`.png`, `.jpg`, `.webp`).
+- **OCR & visual inspection:** Extracts copy from documents and ad images, checks visual brand-rule violations, and detects unauthorized brand/logo usage across both copy and creative assets.
+
+### 2. Two-Way Spotlight Annotator, Status Triage & Editorial UI
+- **Status & risk filtering:** Reviewers can filter the queue by both status (`Needs review`, `Changes`, `Approved`) and risk level (`High`, `Medium`, `Low`).
+- **Two-way spotlighting:** Hovering a finding highlights the exact flagged phrase inline inside the draft copy (and vice versa), with click-to-zoom inspection for uploaded ad creatives.
+- **Interactive data visualizations:** Added a reactive risk donut chart and freshness alerts on the Dashboard, a master–detail **Fact Passport** knowledge library with live search highlighting, a drag-and-drop writing sheet, and an animated radial **Guideline Health** gauge.
+
+### 3. Live Editable Knowledge Library & PDF Brand-Guide Importer
+- **Self-serve rule management:** Admins can create, edit, and archive Prices, Offers, Approved Claims, and Banned Terms directly from `/dashboard/library`.
+- **PDF Brand-Guide Importer:** Admins can upload a brand guideline PDF to extract structured rules for review and one-click approval into the live compliance library.
+
+### 4. Role-Based Access Control (RBAC) & Admin Team Management
+- **Three-tier governance (`Creator`, `Reviewer`, `Admin`):**
+  - **Creators** can run compliance checks, submit drafts, apply safe fixes, and edit/resubmit rejected drafts.
+  - **Reviewers** can inspect findings, dismiss findings with recorded reasons, report AI false positives, approve/revoke approvals, and export audit logs.
+  - **Admins** have full Reviewer capabilities plus exclusive control over Knowledge Library edits, source freshness re-checks, brand-guide imports, and team role management (`403` enforced on the API for non-Admins).
+- **Team & Roles console (`/dashboard/team`):** Admins can onboard teammates and promote/demote roles (`GET/POST /api/users`, `PATCH /api/users/:id/role`) with self-demotion protection. Public `/signup` accounts start as `Creator` until promoted by an Admin, and role changes sync dynamically via `/api/auth/me`.
+
+### 5. Creator "Edit & Resubmit" Loop (`PATCH /api/drafts/:id`)
+- When a Reviewer requests changes, Creators can reopen that exact draft via **Edit & Resubmit Draft** with the Reviewer's feedback displayed inline.
+- Edits update the existing draft in place—re-running compliance checks, preserving full audit history (`RESUBMITTED`), and returning it to `Needs review` without creating duplicate drafts.
+
+### 6. Cryptographic Approval Revocation
+- Reviewers and Admins can revoke an accidental or outdated approval directly from `/dashboard/review` (**Revoke approval & request changes**).
+- Revoking marks `approval_badges.is_revoked = true`, logs `APPROVAL_REVOKED` in the audit trail, unlocks the draft for Creator edits and later re-approval, and immediately shows a red **Approval Badge Revoked** alert on `/verify/[badgeCode]`.
+
+### 7. Audit Export, Human-AI Learning Loop & Public Tamper Verifier
+- **Compliance Audit Export:** One-click CSV and JSON audit log downloads (`GET /api/audit-logs/export`) in `/dashboard/review`.
+- **Human-AI Learning Loop:** `/dashboard/health` surfaces **Learned from human reviewers** corrections (`GET /api/ai-mistakes`) and early override-rate signals to tune nuance without retraining.
+- **Public SHA-256 Badge & Tamper Verifier (`/verify`, `/verify/[badgeCode]`):** Anyone can scan a QR code or open a verification link to confirm authenticity, inspect the signed snapshot, and detect any post-approval text tampering via SHA-256 hash comparison.
+
+### 8. Production Database, Deployment & SEO Hardening
+- **Async PostgreSQL backend:** Migrated and synced all Round 3 endpoints to PostgreSQL (`migration/postgresql-supabase`) on **Render**, preserving both SQLite (local/tests) and hosted PostgreSQL compatibility.
+- **Frontend & SEO:** Deployed the Next.js frontend on **Vercel** with a dynamic `sitemap`, crawler rules, and search metadata configured for the custom domain.
