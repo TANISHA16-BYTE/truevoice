@@ -16,6 +16,8 @@ import {
   Share2,
   Sparkles,
   Trash2,
+  AlertTriangle,
+  RotateCcw,
   Upload,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -122,6 +124,12 @@ export default function SubmitPage() {
   const canReportMistake = user?.role === "reviewer" || user?.role === "admin";
 
   const [draftTitle, setDraftTitle] = useState("");
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+const [loadingEditDraft, setLoadingEditDraft] = useState(false);
+const [reviewerFeedback, setReviewerFeedback] = useState<{
+  actor: string;
+  note: string;
+} | null>(null);
   const [channel, setChannel] = useState("Instagram");
   const [text, setText] = useState("");
   const [checkedText, setCheckedText] = useState("");
@@ -178,6 +186,56 @@ export default function SubmitPage() {
     }, 450);
     return () => clearInterval(timer);
   }, [loading, uploadingFile]);
+
+  useEffect(() => {
+  const draftId = new URLSearchParams(window.location.search).get("draftId");
+  if (!draftId) return;
+
+  let cancelled = false;
+  setLoadingEditDraft(true);
+  setError(null);
+
+  api<{
+    draft?: { id: string; title?: string; channel?: string; content?: string; text?: string };
+    history?: { action?: string; actor_name?: string; actor?: string; details?: string; note?: string }[];
+  }>(`/drafts/${encodeURIComponent(draftId)}`)
+    .then((res) => {
+      if (cancelled || !res?.draft) return;
+      setEditingDraftId(res.draft.id);
+      setDraftTitle(res.draft.title ?? "");
+      const matchedChannel = CHANNELS.find(
+        (c) => c.id.toLowerCase() === (res.draft?.channel ?? "").toLowerCase()
+      );
+      if (matchedChannel) setChannel(matchedChannel.id);
+      setText(res.draft.content ?? res.draft.text ?? "");
+      setResult(null);
+      setSavedDraftId(null);
+
+      const changes = (res.history ?? []).filter(
+        (h) => (h.action ?? "").toUpperCase() === "CHANGES_REQUESTED"
+      );
+      const latest = changes[changes.length - 1];
+      if (latest) {
+        setReviewerFeedback({
+          actor: latest.actor_name ?? latest.actor ?? "Reviewer",
+          note: (latest.details ?? latest.note ?? "Please address flagged findings.").trim(),
+        });
+      }
+      setNotice("Editing existing draft. Fix the copy, run Check draft, and resubmit.");
+    })
+    .catch((err) => {
+      if (!cancelled) {
+        setError(err instanceof Error ? err.message : "Could not load draft for editing.");
+      }
+    })
+    .finally(() => {
+      if (!cancelled) setLoadingEditDraft(false);
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   function startExampleTypewriter() {
     stopTypewriter(false);
@@ -245,6 +303,11 @@ export default function SubmitPage() {
     setNotice(null);
     setOpenWhyId(null);
     setOpenReportId(null);
+    setEditingDraftId(null);
+setReviewerFeedback(null);
+if (window.location.search.includes("draftId=")) {
+  window.history.replaceState(null, "", "/dashboard/submit");
+}
     setHandedIds({});
     setMistakeStatus({});
   }
@@ -399,8 +462,11 @@ export default function SubmitPage() {
         hour: "2-digit",
         minute: "2-digit",
       })})`;
-      const res = await api<CreateDraftResponse>("/drafts", {
-        method: "POST",
+      const endpoint = editingDraftId
+        ? `/drafts/${encodeURIComponent(editingDraftId)}`
+        : "/drafts";
+      const res = await api<CreateDraftResponse>(endpoint, {
+        method: editingDraftId ? "PATCH" : "POST",
         body: {
           title: draftTitle.trim() || fallbackTitle,
           channel,
@@ -409,14 +475,18 @@ export default function SubmitPage() {
           risk_level: result.risk_level ?? "LOW",
         },
       });
-      const id = res.id ?? res.draft_id;
+      const id = res.id ?? res.draft_id ?? editingDraftId;
       if (!id) throw new Error("Backend did not return a draft ID.");
       const dbFindings = Array.isArray(res.findings) ? res.findings : result.findings ?? [];
       setSavedDraftId(id);
       if (Array.isArray(res.findings)) {
         setResult((prev) => (prev ? { ...prev, findings: res.findings } : prev));
       }
-      setNotice("✓ Draft submitted to Review Queue!");
+      setNotice(
+        editingDraftId
+          ? "✓ Updated draft resubmitted to Review Queue!"
+          : "✓ Draft submitted to Review Queue!"
+      );
       return { id, findings: dbFindings };
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit draft to review queue.");
@@ -575,7 +645,7 @@ export default function SubmitPage() {
           </p>
         </motion.div>
 
-        {/* Live 3-Step Check Radar */}
+  {/* Live 3-Step Check Radar */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -621,6 +691,38 @@ export default function SubmitPage() {
             );
           })}
         </motion.div>
+
+        {/* Reviewer Feedback Banner when editing an existing draft */}
+        {(loadingEditDraft || editingDraftId) && (
+          <div className="rounded-2xl border border-[#7a4b00]/30 bg-[#f6e7c8]/70 p-4 text-xs text-[#7a4b00]">
+            {loadingEditDraft ? (
+              <span>Loading draft for editing…</span>
+            ) : (
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="inline-flex items-center gap-1.5 font-semibold">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    Editing existing draft (will update in place—no duplicate created)
+                  </p>
+                  {reviewerFeedback && (
+                    <p>
+                      <strong>{reviewerFeedback.actor} requested changes:</strong>{" "}
+                      {reviewerFeedback.note}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#7a4b00]/30 bg-white px-2.5 py-1 font-semibold text-[#7a4b00] hover:bg-[#fbf7f0]"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  New draft instead
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tactile Stationery Sheet + Magnetic Dropzone */}
         <motion.div

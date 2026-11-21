@@ -131,6 +131,7 @@ export default function GuidelineHealthPage() {
   const scoreRatio = Math.min(Math.max(score, 0), 100) / 100;
   const isInsufficient = data?.status === "INSUFFICIENT_DATA";
   const unclearCount = data?.problematic_rules_count ?? alerts.length;
+  const hasElevatedOverrides = rules.some((r) => r.override_rate_pct >= 30);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 sm:space-y-8">
@@ -371,10 +372,16 @@ export default function GuidelineHealthPage() {
                   <ShieldCheck className="h-7 w-7" />
                 </motion.div>
                 <p className="mt-4 font-serif text-lg font-semibold text-[var(--tv-ink)]">
-                  All guidelines are crystal clear
+                  {isInsufficient || hasElevatedOverrides || score < 90
+                    ? "Monitoring early override signals"
+                    : "All guidelines are crystal clear"}
                 </p>
                 <p className="mt-1 max-w-xs text-xs text-[var(--tv-muted)]">
-                  All guidelines currently have low override rates across reviewed drafts.
+                  {hasElevatedOverrides
+                    ? "Some rules (like those with 30%+ overrides) are being watched, but need more review samples before triggering a formal rewrite alert."
+                    : isInsufficient
+                      ? "More reviewed drafts are needed before rules can be marked as unclear or fully healthy."
+                      : "All guidelines currently have low override rates across reviewed drafts."}
                 </p>
               </div>
             ) : (
