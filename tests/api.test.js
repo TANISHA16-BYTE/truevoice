@@ -111,6 +111,14 @@ async function runApiTests() {
     reviewerTokenForTests = reviewerToken;
     console.log("  -> Passed. Logged in Riddhi Sharma (Role: " + reviewerLogin.data.user.role + ")");
 
+    const adminLogin = await invokeRoute("POST", "/api/auth/login", { "content-type": "application/json" }, {
+      email: "manager@glowvale.demo",
+      password: "admin123"
+    });
+    if (adminLogin.status !== 200 || !adminLogin.data.token) throw new Error("Admin login failed");
+    const adminToken = adminLogin.data.token;
+    console.log("  -> Passed. Logged in Admin (Role: " + adminLogin.data.user.role + ")");
+
     console.log("\n[TEST 5] GET /api/library/sources & Stale Detection");
     const sourcesRes = await invokeRoute("GET", "/api/library/sources");
     const s06 = sourcesRes.data.sources.find(s => s.source_id === "S-06");
@@ -430,13 +438,25 @@ async function runApiTests() {
     }
     console.log("  -> Passed. Creator receives 403 for library edits.");
 
-    console.log("\n[TEST 26] PR #11 Reviewer can update source freshness");
-    const reviewerLibraryPatch = await invokeRoute(
+    console.log("\n[TEST 26] PR #11 Reviewer blocked (403) & Admin can update source freshness");
+    const reviewerLibraryPatchDenied = await invokeRoute(
       "PATCH",
       "/api/library/S-06",
       {
         "content-type": "application/json",
         authorization: "Bearer " + reviewerToken
+      },
+      { last_checked_at: "2026-11-15" }
+    );
+    if (reviewerLibraryPatchDenied.status !== 403) {
+      throw new Error("Reviewer was incorrectly allowed to edit the library");
+    }
+    const adminLibraryPatch = await invokeRoute(
+      "PATCH",
+      "/api/library/S-06",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + adminToken
       },
       {
         last_checked_at: "2026-11-15",
@@ -444,13 +464,13 @@ async function runApiTests() {
       }
     );
     if (
-      reviewerLibraryPatch.status !== 200 ||
-      !reviewerLibraryPatch.data.item ||
-      reviewerLibraryPatch.data.item.last_checked_at !== "2026-11-15"
+      adminLibraryPatch.status !== 200 ||
+      !adminLibraryPatch.data.item ||
+      adminLibraryPatch.data.item.last_checked_at !== "2026-11-15"
     ) {
-      throw new Error("Reviewer source freshness update failed");
+      throw new Error("Admin source freshness update failed");
     }
-    console.log("  -> Passed. Reviewer updated source freshness.");
+    console.log("  -> Passed. Reviewer denied (403) & Admin updated source freshness.");
 
     console.log("\n[TEST 27] PR #11 Unified Library response");
     const unifiedLibrary = await invokeRoute("GET", "/api/library");
@@ -622,7 +642,7 @@ async function runApiTests() {
       "Banned: age-reversal -> skin-refreshing (Cosmetic boundary)",
       "Key Ingredient: Rosewater & Niacinamide"
     ].join("\n");
-    const reviewerImport = await invokeRoute(
+    const reviewerImportDenied = await invokeRoute(
       "POST",
       "/api/library/import-pdf",
       {
@@ -634,14 +654,30 @@ async function runApiTests() {
         file_base64: Buffer.from(sampleGuide, "utf8").toString("base64")
       }
     );
-    if (
-      reviewerImport.status !== 200 ||
-      !Array.isArray(reviewerImport.data.items) ||
-      reviewerImport.data.items.length < 4
-    ) {
-      throw new Error("Expected reviewer brand guide import to extract >= 4 items, got " + JSON.stringify(reviewerImport.data));
+    if (reviewerImportDenied.status !== 403) {
+      throw new Error("Expected 403 for reviewer on /api/library/import-pdf, got " + reviewerImportDenied.status);
     }
-    console.log("  -> Passed. Role guard (403) & checklist extraction (" + reviewerImport.data.items.length + " items) succeeded.");
+
+    const adminImport = await invokeRoute(
+      "POST",
+      "/api/library/import-pdf",
+      {
+        "content-type": "application/json",
+        authorization: "Bearer " + adminToken
+      },
+      {
+        filename: "q4_brand_update.md",
+        file_base64: Buffer.from(sampleGuide, "utf8").toString("base64")
+      }
+    );
+    if (
+      adminImport.status !== 200 ||
+      !Array.isArray(adminImport.data.items) ||
+      adminImport.data.items.length < 4
+    ) {
+      throw new Error("Expected admin brand guide import to extract >= 4 items, got " + JSON.stringify(adminImport.data));
+    }
+    console.log("  -> Passed. Admin-only role guard (403 for creator & reviewer) & checklist extraction (" + adminImport.data.items.length + " items) succeeded.");
 
     console.log("\n=======================================================");
     console.log("   ALL 33 INTEGRATION TESTS PASSED");

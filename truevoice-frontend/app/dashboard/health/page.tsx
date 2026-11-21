@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/SessionContext";
 
 type RuleMetric = {
   id?: string;
@@ -61,6 +62,8 @@ function useCountUp(target: number, enabled: boolean, duration = 900): number {
 }
 
 export default function GuidelineHealthPage() {
+  const { user } = useSession();
+  const isAdmin = user?.role === "admin";
   const [data, setData] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingRef, setEditingRef] = useState<string | null>(null);
@@ -449,7 +452,7 @@ export default function GuidelineHealthPage() {
                               </button>
                             </div>
                           </motion.div>
-                        ) : (
+                        ) : isAdmin ? (
                           <motion.button
                             key="btn"
                             type="button"
@@ -463,6 +466,10 @@ export default function GuidelineHealthPage() {
                             <Edit3 className="h-3.5 w-3.5" />
                             <span>Draft clearer wording</span>
                           </motion.button>
+                        ) : (
+                          <p className="mt-3 text-[11px] font-medium text-[var(--tv-muted)]">
+                            Admin permission required to edit rule wording in the library.
+                          </p>
                         )}
                       </AnimatePresence>
                     </div>
