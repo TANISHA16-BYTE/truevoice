@@ -7,4 +7,4 @@ Disallow: /signup
 Disallow: /backend/
 Disallow: /api/
 
-Sitemap: https://truevoice-devvibe.vercel.app/sitemap.xml
+Sitemap: https://www.thetruevoice.xyz/sitemap.xml
