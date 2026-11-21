@@ -2,18 +2,18 @@
 const crypto = require("crypto");
 const db = require("../db/database");
 
-function checkRegionalNuances(text) {
+async function checkRegionalNuances(text) {
   const findings = [];
   const normalizedText = text.toLowerCase();
 
   // 1. Fetch learned corrections from ai_mistakes table
-  const aiMistakes = db.query("SELECT * FROM ai_mistakes");
+  const aiMistakes = await db.query("SELECT * FROM ai_mistakes");
   const learnedAllowedPhrases = new Set(
     aiMistakes.map(m => m.phrase.toLowerCase().trim())
   );
 
   // 2. Fetch regional notes
-  const regionalNotes = db.query("SELECT * FROM regional_notes");
+  const regionalNotes = await db.query("SELECT * FROM regional_notes");
 
   for (const rn of regionalNotes) {
     const phraseLower = rn.phrase.toLowerCase();
@@ -23,7 +23,7 @@ function checkRegionalNuances(text) {
         continue;
       }
 
-      if (rn.allowed === 1) {
+      if (rn.allowed === true || rn.allowed === 1) {
         continue;
       }
 
@@ -45,20 +45,20 @@ function checkRegionalNuances(text) {
 
 // CHANGED: text is trimmed to a safe length, and reporting the same phrase for the same
 // region again updates the earlier correction instead of adding a duplicate.
-function reportAiMistake({ phrase, region, incorrect_flag, user_correction, reviewer_id }) {
+async function reportAiMistake({ phrase, region, incorrect_flag, user_correction, reviewer_id }) {
   const cleanPhrase = String(phrase).trim().slice(0, 120);
   const cleanRegion = String(region || "India-North").trim().slice(0, 60);
   const cleanFlag = String(incorrect_flag || "Flagged as violation").trim().slice(0, 200);
   const cleanCorrection = String(user_correction).trim().slice(0, 300);
   const createdAt = new Date().toISOString();
 
-  const existing = db.get(
+  const existing = await db.get(
     "SELECT id FROM ai_mistakes WHERE lower(phrase) = lower(?) AND region = ?",
     [cleanPhrase, cleanRegion]
   );
 
   if (existing) {
-    db.run(
+    await db.run(
       "UPDATE ai_mistakes SET incorrect_flag = ?, user_correction = ?, reviewer_id = ?, created_at = ? WHERE id = ?",
       [cleanFlag, cleanCorrection, reviewer_id, createdAt, existing.id]
     );
@@ -74,7 +74,7 @@ function reportAiMistake({ phrase, region, incorrect_flag, user_correction, revi
   }
 
   const id = "aim_" + Date.now() + "_" + crypto.randomBytes(2).toString("hex");
-  db.run(
+  await db.run(
     "INSERT INTO ai_mistakes (id, phrase, region, incorrect_flag, user_correction, reviewer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [id, cleanPhrase, cleanRegion, cleanFlag, cleanCorrection, reviewer_id, createdAt]
   );
@@ -89,13 +89,13 @@ function reportAiMistake({ phrase, region, incorrect_flag, user_correction, revi
   };
 }
 
-function listAiMistakes() {
-  return db.query("SELECT * FROM ai_mistakes ORDER BY created_at DESC");
+async function listAiMistakes() {
+  return await db.query("SELECT * FROM ai_mistakes ORDER BY created_at DESC");
 }
 
 // NEW: the most recent corrections, so the AI check can be shown them as examples.
-function getLearnedCorrections(limit = 10) {
-  return db.query(
+async function getLearnedCorrections(limit = 10) {
+  return await db.query(
     "SELECT phrase, region, incorrect_flag, user_correction FROM ai_mistakes ORDER BY created_at DESC LIMIT ?",
     [limit]
   );

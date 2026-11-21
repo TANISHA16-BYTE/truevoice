@@ -157,7 +157,7 @@ Respond with a JSON array only:
 }
 
 // Never trust the AI's answer blindly. Check every finding before using it.
-function sanitizeAiFindings(list, text, brandGuide) {
+async function sanitizeAiFindings(list, text, brandGuide) {
   const lowerText = text.toLowerCase();
   const clean = [];
 
@@ -186,7 +186,7 @@ function sanitizeAiFindings(list, text, brandGuide) {
 
     // Never trust a source ID supplied by the AI unless it exists in our database.
     const sourceExists = requestedSourceId
-      ? Boolean(db.get(
+      ? Boolean(await db.get(
           "SELECT source_id FROM sources WHERE source_id = ?",
           [requestedSourceId]
         ))
@@ -228,7 +228,7 @@ async function checkSemanticAI(text, existingFindings = []) {
       const brandGuide = loadBrandGuide();
 
       // NEW: reviewer corrections ("Report AI Mistake"), most recent first.
-      const allCorrections = getLearnedCorrections(50);
+      const allCorrections = await getLearnedCorrections(50);
       const learnedPhrases = allCorrections
         .map((c) => String(c.phrase || "").toLowerCase().trim())
         .filter(Boolean);
@@ -236,7 +236,7 @@ async function checkSemanticAI(text, existingFindings = []) {
       const prompt = buildPrompt(text, brandGuide, allCorrections.slice(0, 10));
       const geminiResult = await callGeminiWithRetry(prompt, config.GEMINI_API_KEY);
       if (Array.isArray(geminiResult)) {
-        const checked = sanitizeAiFindings(geminiResult, text, brandGuide).filter(
+        const checked = (await sanitizeAiFindings(geminiResult, text, brandGuide)).filter(
           (f) =>
             // Skip AI findings for rules the exact checks already flagged (avoids duplicates).
             (!f.rule_ref || !existingRulesFlagged.has(f.rule_ref)) &&

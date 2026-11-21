@@ -375,7 +375,7 @@ async function runApiTests() {
     if (!outOfWindowOffer.data.findings.some(f => f.type === "offer_date_violation")) {
       throw new Error("Out-of-window offer date was not flagged");
     }
-    const scheduledOutOfWindow = checkExactRules("Use WINTER20 for 20% off.", { scheduled_for: "2026-11-15" });
+    const scheduledOutOfWindow = await checkExactRules("Use WINTER20 for 20% off.", { scheduled_for: "2026-11-15" });
     if (!scheduledOutOfWindow.some(f => f.type === "offer_date_violation")) {
       throw new Error("scheduled_for before offer valid_from was not flagged");
     }

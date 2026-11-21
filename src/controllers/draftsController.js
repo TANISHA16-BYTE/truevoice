@@ -14,7 +14,7 @@ function requireUser(user) {
   return user ? null : failure(401, "Authentication required.");
 }
 
-function requireCreator(user) {
+async function requireCreator(user) {
   const auth = requireUser(user);
   if (auth) return auth;
   if (user.role !== "creator") {
@@ -23,7 +23,7 @@ function requireCreator(user) {
   return null;
 }
 
-function requireReviewer(user) {
+async function requireReviewer(user) {
   const auth = requireUser(user);
   if (auth) return auth;
   if (!REVIEWER_ROLES.includes(user.role)) {
@@ -32,7 +32,7 @@ function requireReviewer(user) {
   return null;
 }
 
-function findAuthorizedDraft(draftId, user, allowedRoles) {
+async function findAuthorizedDraft(draftId, user, allowedRoles) {
   const auth = requireUser(user);
   if (auth) return { error: auth };
 
@@ -40,7 +40,7 @@ function findAuthorizedDraft(draftId, user, allowedRoles) {
     return { error: failure(403, "You do not have permission for this action.") };
   }
 
-  const draft = db.get("SELECT * FROM drafts WHERE id = ?", [draftId]);
+  const draft = await db.get("SELECT * FROM drafts WHERE id = ?", [draftId]);
   if (!draft) return { error: failure(404, "Draft not found.") };
 
   if (user.role === "creator" && draft.creator_id !== user.id) {
@@ -50,16 +50,16 @@ function findAuthorizedDraft(draftId, user, allowedRoles) {
   return { draft };
 }
 
-function logHistory(draftId, actorId, actorName, action, details) {
+async function logHistory(draftId, actorId, actorName, action, details) {
   const id = "hist_" + crypto.randomBytes(4).toString("hex");
-  db.run(
+  await db.run(
     "INSERT INTO draft_history (id, draft_id, actor_id, actor_name, action, details, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [id, draftId, actorId, actorName, action, details, new Date().toISOString()]
   );
 }
 
 async function createDraft(body, user) {
-  const denied = requireCreator(user);
+  const denied = await requireCreator(user);
   if (denied) return denied;
 
   const {
@@ -92,19 +92,19 @@ async function createDraft(body, user) {
     creator_id: creatorId
   });
 
-  db.run(
+  await db.run(
     "INSERT INTO drafts (id, title, content, original_content, channel, scheduled_for, product_code, creator_id, status, risk_level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?)",
     [draftId, title, draftContent, draftContent, channel, scheduled_for, product_code, creatorId, checkResult.risk_level, now, now]
   );
 
   for (const f of checkResult.findings) {
-    db.run(
+    await db.run(
       "INSERT INTO findings (id, draft_id, type, severity, flagged_text, rule_ref, source_id, reason, suggested_fix, confidence, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
       [f.id, draftId, f.type, f.severity, f.flagged_text, f.rule_ref, f.source_id, f.reason, f.suggested_fix, f.confidence || 1.0, now]
     );
   }
 
-  logHistory(
+  await logHistory(
     draftId, creatorId, creatorName, "SUBMITTED",
     "Draft submitted with " + checkResult.findings.length +
     " findings. Risk level: " + checkResult.risk_level
@@ -125,7 +125,7 @@ async function createDraft(body, user) {
   };
 }
 
-function listDrafts(query = {}, user) {
+async function listDrafts(query = {}, user) {
   const auth = requireUser(user);
   if (auth) return auth;
 
@@ -157,40 +157,42 @@ function listDrafts(query = {}, user) {
 
   sql += " ORDER BY CASE risk_level WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END ASC, created_at DESC";
 
-  const drafts = db.query(sql, params);
-  const results = drafts.map(d => {
-    const findingsCount = db.get(
+  const drafts = await db.query(sql, params);
+  const results = await Promise.all(drafts.map(async d => {
+    const findingsCountRow = await db.get(
       "SELECT COUNT(*) as count FROM findings WHERE draft_id = ?", [d.id]
-    )?.count || 0;
-    const highCount = db.get(
+    );
+    const highCountRow = await db.get(
       "SELECT COUNT(*) as count FROM findings WHERE draft_id = ? AND severity = 'HIGH'", [d.id]
-    )?.count || 0;
+    );
+    const findingsCount = Number(findingsCountRow?.count || 0);
+    const highCount = Number(highCountRow?.count || 0);
 
     return {
       ...d,
       total_findings: findingsCount,
       high_severity_findings: highCount
     };
-  });
+  }));
 
   return { status: 200, data: { drafts: results } };
 }
 
-function getDraftDetails(draftId, user) {
-  const result = findAuthorizedDraft(
+async function getDraftDetails(draftId, user) {
+  const result = await findAuthorizedDraft(
     draftId, user, ["creator", ...REVIEWER_ROLES]
   );
   if (result.error) return result.error;
 
-  const findings = db.query(
+  const findings = await db.query(
     "SELECT * FROM findings WHERE draft_id = ? ORDER BY CASE severity WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END ASC",
     [draftId]
   );
-  const history = db.query(
+  const history = await db.query(
     "SELECT * FROM draft_history WHERE draft_id = ? ORDER BY timestamp ASC",
     [draftId]
   );
-  const badge = db.get(
+  const badge = await db.get(
     "SELECT * FROM approval_badges WHERE draft_id = ?", [draftId]
   );
 
@@ -200,8 +202,8 @@ function getDraftDetails(draftId, user) {
   };
 }
 
-function explainFinding(draftId, findingId, body, user) {
-  const access = findAuthorizedDraft(draftId, user, ["creator"]);
+async function explainFinding(draftId, findingId, body, user) {
+  const access = await findAuthorizedDraft(draftId, user, ["creator"]);
   if (access.error) return access.error;
 
   const explanation =
@@ -210,7 +212,7 @@ function explainFinding(draftId, findingId, body, user) {
     return failure(400, "Explanation text is required.");
   }
 
-  const finding = db.get(
+  const finding = await db.get(
     "SELECT * FROM findings WHERE id = ? AND draft_id = ?",
     [findingId, draftId]
   );
@@ -233,12 +235,12 @@ function explainFinding(draftId, findingId, body, user) {
     };
   }
 
-  db.run(
+  await db.run(
     "UPDATE findings SET creator_explanation = ?, status = 'explained' WHERE id = ?",
     [explanation, findingId]
   );
 
-  logHistory(
+  await logHistory(
     draftId, user.id, user.name, "EXPLAINED_FINDING",
     "Creator explained finding " + findingId + ": " + explanation
   );
@@ -255,15 +257,15 @@ function explainFinding(draftId, findingId, body, user) {
   };
 }
 
-function handoverToManager(draftId, body, user) {
-  const access = findAuthorizedDraft(draftId, user, ["creator"]);
+async function handoverToManager(draftId, body, user) {
+  const access = await findAuthorizedDraft(draftId, user, ["creator"]);
   if (access.error) return access.error;
 
   const { finding_id, explanation, reason } = body || {};
 
   // Support saving one-chance context explanation + escalating in a single call
   if (finding_id && typeof explanation === "string" && explanation.trim()) {
-    const finding = db.get(
+    const finding = await db.get(
       "SELECT * FROM findings WHERE id = ? AND draft_id = ?",
       [finding_id, draftId]
     );
@@ -283,11 +285,11 @@ function handoverToManager(draftId, body, user) {
     }
 
     const cleanExplanation = explanation.trim().slice(0, 500);
-    db.run(
+    await db.run(
       "UPDATE findings SET creator_explanation = ?, status = 'explained' WHERE id = ?",
       [cleanExplanation, finding_id]
     );
-    logHistory(
+    await logHistory(
       draftId, user.id, user.name, "EXPLAINED_FINDING",
       "Creator explained finding " + finding_id + ": " + cleanExplanation
     );
@@ -298,12 +300,12 @@ function handoverToManager(draftId, body, user) {
     (typeof explanation === "string" && explanation.trim()) ||
     "Creator requested human review";
 
-  db.run(
-    "UPDATE drafts SET handover_to_manager = 1, manager_handover_reason = ?, status = 'in_review', updated_at = ? WHERE id = ?",
+  await db.run(
+    "UPDATE drafts SET handover_to_manager = TRUE, manager_handover_reason = ?, status = 'in_review', updated_at = ? WHERE id = ?",
     [handoverReason, new Date().toISOString(), draftId]
   );
 
-  logHistory(
+  await logHistory(
     draftId, user.id, user.name, "HANDOVER_TO_MANAGER",
     "Escalated to human reviewer: " + handoverReason
   );
@@ -318,8 +320,8 @@ function handoverToManager(draftId, body, user) {
   };
 }
 
-function dismissFinding(draftId, findingId, body, user) {
-  const access = findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
+async function dismissFinding(draftId, findingId, body, user) {
+  const access = await findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
   if (access.error) return access.error;
 
   const { reason } = body || {};
@@ -327,18 +329,18 @@ function dismissFinding(draftId, findingId, body, user) {
     return failure(400, "A dismissal reason is required to maintain the audit trail.");
   }
 
-  const finding = db.get(
+  const finding = await db.get(
     "SELECT * FROM findings WHERE id = ? AND draft_id = ?",
     [findingId, draftId]
   );
   if (!finding) return failure(404, "Finding not found.");
 
-  db.run(
+  await db.run(
     "UPDATE findings SET status = 'dismissed', dismiss_reason = ? WHERE id = ?",
     [reason, findingId]
   );
 
-  logHistory(
+  await logHistory(
     draftId, user.id, user.name, "DISMISSED_FINDING",
     "Dismissed finding (" + (finding.rule_ref || "rule") + "): " + reason
   );
@@ -347,11 +349,11 @@ function dismissFinding(draftId, findingId, body, user) {
 }
 
 async function acceptFindingFix(draftId, findingId, body, user) {
-  const access = findAuthorizedDraft(draftId, user, ["creator"]);
+  const access = await findAuthorizedDraft(draftId, user, ["creator"]);
   if (access.error) return access.error;
 
   const draft = access.draft;
-  const finding = db.get(
+  const finding = await db.get(
     "SELECT * FROM findings WHERE id = ? AND draft_id = ?",
     [findingId, draftId]
   );
@@ -367,13 +369,13 @@ async function acceptFindingFix(draftId, findingId, body, user) {
     newContent += " " + fix;
   }
 
-  db.run(
+  await db.run(
     "UPDATE drafts SET content = ?, updated_at = ? WHERE id = ?",
     [newContent, new Date().toISOString(), draftId]
   );
-  db.run("UPDATE findings SET status = 'accepted' WHERE id = ?", [findingId]);
+  await db.run("UPDATE findings SET status = 'accepted' WHERE id = ?", [findingId]);
 
-  logHistory(
+  await logHistory(
     draftId, user.id, user.name, "ACCEPTED_FIX",
     "Applied fix for finding " + findingId + ": " + fix
   );
@@ -388,14 +390,14 @@ async function acceptFindingFix(draftId, findingId, body, user) {
   };
 }
 
-function approveDraft(draftId, body, user) {
-  const access = findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
+async function approveDraft(draftId, body, user) {
+  const access = await findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
   if (access.error) return access.error;
 
   const draft = access.draft;
 
   // Prevent generating multiple approval badges for the same draft.
-  const existingBadge = db.get(
+  const existingBadge = await db.get(
     "SELECT * FROM approval_badges WHERE draft_id = ? LIMIT 1",
     [draftId]
   );
@@ -415,19 +417,19 @@ function approveDraft(draftId, body, user) {
   const now = new Date().toISOString();
   const note = typeof body?.note === "string" ? body.note.trim() : "";
 
-  const badge = createApprovalBadge({
+  const badge = await createApprovalBadge({
     draftId,
     content: draft.content,
     approvedBy: user.id,
     reviewerName: user.name
   });
 
-  db.run(
+  await db.run(
     "UPDATE drafts SET status = 'approved', updated_at = ? WHERE id = ?",
     [now, draftId]
   );
 
-  logHistory(
+  await logHistory(
     draftId,
     user.id,
     user.name,
@@ -448,8 +450,8 @@ function approveDraft(draftId, body, user) {
   };
 }
 
-function requestChanges(draftId, body, user) {
-  const access = findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
+async function requestChanges(draftId, body, user) {
+  const access = await findAuthorizedDraft(draftId, user, REVIEWER_ROLES);
   if (access.error) return access.error;
 
   const notes =
@@ -458,11 +460,11 @@ function requestChanges(draftId, body, user) {
     "Please address flagged findings";
   const now = new Date().toISOString();
 
-  db.run(
+  await db.run(
     "UPDATE drafts SET status = 'changes_requested', updated_at = ? WHERE id = ?",
     [now, draftId]
   );
-  logHistory(draftId, user.id, user.name, "CHANGES_REQUESTED", notes);
+  await logHistory(draftId, user.id, user.name, "CHANGES_REQUESTED", notes);
 
   return {
     status: 200,
@@ -475,7 +477,7 @@ function requestChanges(draftId, body, user) {
   };
 }
 
-function decideDraft(draftId, body, user) {
+async function decideDraft(draftId, body, user) {
   const action = String(body?.action || "").trim().toLowerCase();
   const note = typeof body?.note === "string" ? body.note.trim() : "";
 

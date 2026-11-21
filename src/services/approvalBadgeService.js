@@ -13,15 +13,15 @@ function computeContentHash(content) {
   return crypto.createHash("sha256").update(canonical).digest("hex");
 }
 
-function createApprovalBadge({ draftId, content, approvedBy, reviewerName }) {
+async function createApprovalBadge({ draftId, content, approvedBy, reviewerName }) {
   const contentHash = computeContentHash(content);
   const badgeCode = "TV-APPR-" + crypto.randomBytes(3).toString("hex").toUpperCase();
   const approvedAt = new Date().toISOString();
   const publicUrl = config.BASE_URL + "/verify/" + badgeCode;
   const id = "badge_" + Date.now();
 
-  db.run(
-    "INSERT INTO approval_badges (id, draft_id, badge_code, content_hash, approved_by, reviewer_name, approved_at, public_url, is_revoked, snapshot_content, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+  await db.run(
+    "INSERT INTO approval_badges (id, draft_id, badge_code, content_hash, approved_by, reviewer_name, approved_at, public_url, is_revoked, snapshot_content, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)",
     [
       id,
       draftId,
@@ -48,8 +48,8 @@ function createApprovalBadge({ draftId, content, approvedBy, reviewerName }) {
   };
 }
 
-function verifyBadgeAndContent(badgeCode, submittedContent = null) {
-  const badge = db.get("SELECT * FROM approval_badges WHERE badge_code = ?", [badgeCode.trim().toUpperCase()]);
+async function verifyBadgeAndContent(badgeCode, submittedContent = null) {
+  const badge = await db.get("SELECT * FROM approval_badges WHERE badge_code = ?", [badgeCode.trim().toUpperCase()]);
   if (!badge) {
     return {
       found: false,
@@ -57,7 +57,7 @@ function verifyBadgeAndContent(badgeCode, submittedContent = null) {
     };
   }
 
-  if (badge.is_revoked === 1) {
+  if (badge.is_revoked === 1 || badge.is_revoked === true) {
     return {
       found: true,
       is_revoked: true,
@@ -67,7 +67,7 @@ function verifyBadgeAndContent(badgeCode, submittedContent = null) {
     };
   }
 
-  const draft = db.get("SELECT title FROM drafts WHERE id = ?", [badge.draft_id]);
+  const draft = await db.get("SELECT title FROM drafts WHERE id = ?", [badge.draft_id]);
 
   const result = {
     found: true,

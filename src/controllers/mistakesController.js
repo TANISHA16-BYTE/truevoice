@@ -5,7 +5,7 @@ const { reportAiMistake, listAiMistakes } = require("../services/regionalNuanceS
 // Add "creator" here if creators should also report AI mistakes from Submit Draft.
 const REVIEWER_ROLES = ["reviewer", "admin"];
 
-function submitAiMistake(body, user) {
+async function submitAiMistake(body, user) {
   if (!user) {
     return { status: 401, data: { error: "Login required." } };
   }
@@ -25,7 +25,7 @@ function submitAiMistake(body, user) {
     return { status: 400, data: { error: "Phrase and user correction are required." } };
   }
 
-  const result = reportAiMistake({
+  const result = await reportAiMistake({
     phrase,
     region: typeof region === "string" ? region : undefined,
     incorrect_flag: typeof incorrect_flag === "string" ? incorrect_flag : undefined,
@@ -43,8 +43,8 @@ function submitAiMistake(body, user) {
   };
 }
 
-function getMistakes() {
-  const mistakes = listAiMistakes();
+async function getMistakes() {
+  const mistakes = await listAiMistakes();
   return { status: 200, data: { mistakes } };
 }
 

@@ -61,15 +61,15 @@ function matchesProductContext(content, draftProductCode, priceRow) {
   return false;
 }
 
-function checkScheduleClashes(draft) {
+async function checkScheduleClashes(draft) {
   const findings = [];
   const rawText = draft.content || "";
   const content = rawText.toLowerCase();
-  const scheduledPosts = db.query("SELECT * FROM scheduled_posts");
-  const prices = db.query("SELECT * FROM prices WHERE archived = 0");
+  const scheduledPosts = await db.query("SELECT * FROM scheduled_posts");
+  const prices = await db.query("SELECT * FROM prices WHERE archived = 0");
 
   // Official launch date from facts is 2026-11-20 (Friday 20 Nov)
-  const officialLaunchFact = db.get("SELECT fact_value FROM facts WHERE fact_key = 'launch_date' AND product_code = 'GV-SER-30' AND status = 'active'");
+  const officialLaunchFact = await db.get("SELECT fact_value FROM facts WHERE fact_key = 'launch_date' AND product_code = 'GV-SER-30' AND status = 'active'");
   const officialLaunch = officialLaunchFact ? officialLaunchFact.fact_value : "2026-11-20";
   const defaultYear = officialLaunch.slice(0, 4);
 
@@ -164,8 +164,8 @@ function checkScheduleClashes(draft) {
   return findings;
 }
 
-function listScheduledPosts() {
-  return db.query("SELECT * FROM scheduled_posts ORDER BY scheduled_for ASC");
+async function listScheduledPosts() {
+  return await db.query("SELECT * FROM scheduled_posts ORDER BY scheduled_for ASC");
 }
 
 module.exports = {

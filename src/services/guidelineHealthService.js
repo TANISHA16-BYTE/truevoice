@@ -1,12 +1,12 @@
 // Guideline Health Score Service — calculated from real review activity.
 const db = require("../db/database");
 
-function calculateGuidelineHealth() {
-  const rules = db.query(
+async function calculateGuidelineHealth() {
+  const rules = await db.query(
     "SELECT rule_id, title, section, text FROM rules ORDER BY rule_id ASC"
   );
 
-  const findings = db.query(
+  const findings = await db.query(
     "SELECT rule_ref, status, COUNT(*) AS count " +
     "FROM findings WHERE rule_ref IS NOT NULL " +
     "GROUP BY rule_ref, status"

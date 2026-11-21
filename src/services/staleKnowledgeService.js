@@ -2,8 +2,8 @@
 const db = require("../db/database");
 const config = require("../config");
 
-function checkStaleSources() {
-  const sources = db.query("SELECT * FROM sources");
+async function checkStaleSources() {
+  const sources = await db.query("SELECT * FROM sources");
   const demoDate = new Date(config.DEMO_DATE);
   
   const results = [];
@@ -28,8 +28,8 @@ function checkStaleSources() {
   return results;
 }
 
-function getSourceById(sourceId) {
-  return db.get("SELECT * FROM sources WHERE source_id = ?", [sourceId]);
+async function getSourceById(sourceId) {
+  return await db.get("SELECT * FROM sources WHERE source_id = ?", [sourceId]);
 }
 
 module.exports = {

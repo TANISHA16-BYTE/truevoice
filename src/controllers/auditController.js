@@ -1,10 +1,10 @@
 // Regulatory Compliance Audit Export Controller (CSV & JSON)
 const db = require("../db/database");
 
-function exportAuditLogs(query) {
+async function exportAuditLogs(query) {
   const format = (query.format || "json").toLowerCase();
   
-  const history = db.query(`
+  const history = await db.query(`
     SELECT h.id, h.draft_id, d.title as draft_title, d.channel, d.risk_level,
            h.actor_id, h.actor_name, h.action, h.details, h.timestamp
     FROM draft_history h
