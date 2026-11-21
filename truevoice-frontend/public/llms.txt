@@ -1,0 +1,48 @@
+# TrueVoice
+
+> TrueVoice is a pre-publication brand-governance and content-review workspace. It helps teams review marketing drafts against approved brand guidelines and trusted business information before content goes live. Human reviewers remain in control of final decisions.
+
+## Product overview
+
+TrueVoice is designed for teams that create, review, or approve content across employees, agencies, and AI-assisted workflows. It focuses on identifying potential inconsistencies between draft content and approved brand information before publication.
+
+## Core areas
+
+- Pre-publication review of marketing drafts.
+- Checks against configured brand guidelines and terminology.
+- Review of promotional claims, prices, and offers against approved information.
+- Detection of potential campaign and cross-channel inconsistencies.
+- Knowledge freshness prompts for information that may need re-verification.
+- Human review decisions and approval verification.
+
+## Intended users
+
+- Marketing and content teams.
+- Brand managers and reviewers.
+- Agencies creating content for clients.
+- Administrators maintaining approved brand information.
+
+## Workflow
+
+1. Maintain approved brand facts, rules, prices, offers, and terminology.
+2. Submit a content draft for review.
+3. Inspect potential issues and their context.
+4. Correct the draft where needed.
+5. Record a human review decision before publication.
+
+## Important limitations
+
+- TrueVoice supports review; it does not replace human judgment.
+- Similarity warnings are not legal advice or a trademark clearance.
+- A flagged item should be checked against the current approved source before action is taken.
+
+## Public pages
+
+- Product overview: https://www.thetruevoice.xyz/discover.html
+- Sitemap: https://www.thetruevoice.xyz/sitemap.xml
+- Robots policy: https://www.thetruevoice.xyz/robots.txt
+
+## Project
+
+- Product name: TrueVoice
+- Team: DevVibe
