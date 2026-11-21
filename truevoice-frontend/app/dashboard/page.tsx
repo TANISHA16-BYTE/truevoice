@@ -674,6 +674,7 @@ export default function DashboardPage() {
                     : reviewerNote?.action === "CHANGES_REQUESTED"
                       ? "Changes requested"
                       : statusLabel(effectiveStatus);
+                const reviewHref = `/dashboard/review?draftId=${encodeURIComponent(d.id)}`;
 
                 return (
                   <motion.li
@@ -749,7 +750,7 @@ export default function DashboardPage() {
                       </span>
 
                       <Link
-                        href="/dashboard/review"
+                        href={reviewHref}
                         className="group inline-flex items-center gap-1 rounded-lg border border-[var(--tv-edge)] px-3 py-1.5 text-sm font-medium transition-all hover:border-[var(--tv-brand)] hover:bg-[var(--tv-paper)] active:scale-95"
                       >
                         <span>Open</span>
@@ -788,7 +789,7 @@ export default function DashboardPage() {
                                 ))}
                               </div>
                               <Link
-                                href="/dashboard/review"
+                                href={reviewHref}
                                 className="font-semibold text-[var(--tv-brand)] underline"
                               >
                                 Inspect findings &rarr;

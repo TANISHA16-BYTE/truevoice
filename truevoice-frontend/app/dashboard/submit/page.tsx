@@ -681,7 +681,7 @@ export default function SubmitPage() {
           {/* Sheet Body */}
           <div className="space-y-5 p-5 sm:p-6">
             <div className="grid gap-5 lg:grid-cols-12">
-              <div className="lg:col-span-6">
+              <div className="lg:col-span-5">
                 <label htmlFor="draft-title" className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
                   Draft title
                 </label>
@@ -695,14 +695,14 @@ export default function SubmitPage() {
                 />
               </div>
 
-              <div className="lg:col-span-6">
+              <div className="lg:col-span-7">
                 <span className="block text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
                   Channel
                 </span>
                 <div
                   role="radiogroup"
                   aria-label="Channel"
-                  className="mt-1.5 grid grid-cols-2 gap-1.5 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)]/70 p-1 sm:grid-cols-4"
+                  className="mt-1.5 grid grid-cols-2 gap-1.5 rounded-xl border border-[var(--tv-line)] bg-[var(--tv-paper)]/70 p-1 sm:flex sm:flex-wrap"
                 >
                   {CHANNELS.map((c) => {
                     const Icon = c.icon;
@@ -714,7 +714,7 @@ export default function SubmitPage() {
                         role="radio"
                         aria-checked={active}
                         onClick={() => setChannel(c.id)}
-                        className={`relative flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors ${
+                        className={`relative flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:flex-1 ${
                           active
                             ? "text-white"
                             : "text-[var(--tv-muted)] hover:text-[var(--tv-ink)]"
@@ -728,7 +728,7 @@ export default function SubmitPage() {
                           />
                         )}
                         <Icon className="relative z-10 h-3.5 w-3.5 shrink-0" />
-                        <span className="relative z-10 truncate">{c.id}</span>
+                        <span className="relative z-10">{c.id}</span>
                       </button>
                     );
                   })}
@@ -737,7 +737,7 @@ export default function SubmitPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <label
                   htmlFor="draft"
                   className="text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]"
@@ -902,7 +902,7 @@ export default function SubmitPage() {
               <span>&#10003; {notice}</span>
               {savedDraftId && (
                 <Link
-                  href="/dashboard/review"
+                  href={`/dashboard/review?draftId=${encodeURIComponent(savedDraftId)}`}
                   className="inline-flex items-center gap-1 font-semibold underline"
                 >
                   Open in Review queue
