@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
       {
         source: "/",
         destination: "/discover.html",
-        permanent: true,
+        permanent: false,
       },
     ];
   },
