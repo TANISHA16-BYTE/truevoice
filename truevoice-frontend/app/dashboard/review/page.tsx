@@ -10,6 +10,7 @@ import {
   Eye,
   FileText,
   History,
+  Lock,
   MessageSquareWarning,
   ShieldAlert,
   Sparkles,
@@ -89,7 +90,30 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "MEDIUM", label: "Medium" },
   { key: "LOW", label: "Low" },
 ];
+type StatusFilterKey = "ALL" | "NEEDS_REVIEW" | "CHANGES_REQUESTED" | "APPROVED";
 
+const STATUS_FILTERS: { key: StatusFilterKey; label: string }[] = [
+  { key: "ALL", label: "All" },
+  { key: "NEEDS_REVIEW", label: "Needs review" },
+  { key: "CHANGES_REQUESTED", label: "Changes" },
+  { key: "APPROVED", label: "Approved" },
+];
+
+function getStatusBucket(status = ""): Exclude<StatusFilterKey, "ALL"> {
+  const s = status.toLowerCase();
+  if (s.includes("approv")) return "APPROVED";
+  if (s.includes("chang")) return "CHANGES_REQUESTED";
+  return "NEEDS_REVIEW";
+}
+
+const statusPillMeta: Record<
+  Exclude<StatusFilterKey, "ALL">,
+  { label: string; className: string }
+> = {
+  NEEDS_REVIEW: { label: "Needs review", className: "bg-[#f6e7c8]/70 text-[#7a4b00]" },
+  CHANGES_REQUESTED: { label: "Changes", className: "bg-[#f9ddd9] text-[#9b1c13]" },
+  APPROVED: { label: "Approved", className: "bg-[#ddebdd] text-[#1f6b3a]" },
+};
 const riskStyle: Record<string, string> = {
   HIGH: "bg-[#f9ddd9] text-[#9b1c13]",
   MEDIUM: "bg-[#f6e7c8] text-[#7a4b00]",
@@ -186,6 +210,7 @@ export default function ReviewPage() {
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("ALL");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DraftDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -211,7 +236,11 @@ export default function ReviewPage() {
               (riskRank[(b.risk_level ?? "").toUpperCase()] ?? 3)
           );
           setDrafts(sorted);
-          if (sorted.length > 0) setSelectedId(sorted[0].id);
+
+          const targetId = new URLSearchParams(window.location.search).get("draftId");
+          const matched = targetId ? sorted.find((d) => d.id === targetId) : undefined;
+          if (matched) setSelectedId(matched.id);
+          else if (sorted.length > 0) setSelectedId(sorted[0].id);
         }
       })
       .catch((err) => {
@@ -225,9 +254,20 @@ export default function ReviewPage() {
     };
   }, []);
 
-  const filtered = (drafts ?? []).filter((d) =>
-    filter === "ALL" ? true : (d.risk_level ?? "").toUpperCase() === filter
-  );
+   const allDrafts = drafts ?? [];
+  const statusCounts: Record<StatusFilterKey, number> = {
+    ALL: allDrafts.length,
+    NEEDS_REVIEW: allDrafts.filter((d) => getStatusBucket(d.status) === "NEEDS_REVIEW").length,
+    CHANGES_REQUESTED: allDrafts.filter((d) => getStatusBucket(d.status) === "CHANGES_REQUESTED").length,
+    APPROVED: allDrafts.filter((d) => getStatusBucket(d.status) === "APPROVED").length,
+  };
+
+  const filtered = allDrafts.filter((d) => {
+    const matchesRisk = filter === "ALL" ? true : (d.risk_level ?? "").toUpperCase() === filter;
+    const matchesStatus =
+      statusFilter === "ALL" ? true : getStatusBucket(d.status) === statusFilter;
+    return matchesRisk && matchesStatus;
+  });
 
   const selected = filtered.find((d) => d.id === selectedId) ?? filtered[0] ?? null;
   const activeDraftId = selected?.id ?? null;
@@ -260,7 +300,7 @@ export default function ReviewPage() {
   }, [activeDraftId]);
 
   async function recordDecision(action: "approved" | "changes_requested") {
-    if (!selected) return;
+    if (!selected || !isReviewer) return;
     setSubmitting(true);
     setDecisionMsg(null);
     try {
@@ -296,7 +336,7 @@ export default function ReviewPage() {
   }
 
   async function handleDismissFinding(findingId: string) {
-    if (!selected) return;
+    if (!selected || !isReviewer) return;
     const reason = (dismissReasons[findingId] || comment || "").trim();
     if (!reason) {
       setDismissErrors((prev) => ({
@@ -394,7 +434,54 @@ export default function ReviewPage() {
           </span>
         </div>
       )}
+      {/* Status Filter Bar */}
+{drafts !== null && allDrafts.length > 0 && (
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div
+      role="group"
+      aria-label="Filter drafts by status"
+      className="flex flex-wrap gap-1.5 rounded-2xl border border-[var(--tv-champagne)] bg-white/90 p-1.5 shadow-xs"
+    >
+      {STATUS_FILTERS.map((sf) => {
+        const active = statusFilter === sf.key;
+        return (
+          <button
+            key={sf.key}
+            type="button"
+            aria-pressed={active}
+            onClick={() => setStatusFilter(sf.key)}
+            className={`relative inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
+              active ? "text-white" : "text-[var(--tv-muted)] hover:text-[var(--tv-ink)]"
+            }`}
+          >
+            {active && (
+              <motion.span
+                layoutId="review-status-pill"
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                className="absolute inset-0 rounded-xl bg-[var(--tv-brand)] shadow-xs"
+              />
+            )}
+            <span className="relative z-10">{sf.label}</span>
+            <span
+              className={`relative z-10 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
+                active
+                  ? "bg-white/20 text-white"
+                  : "bg-[var(--tv-paper)] text-[var(--tv-ink)]"
+              }`}
+            >
+              {statusCounts[sf.key]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
 
+    <p className="text-xs text-[var(--tv-muted)]">
+      Showing <strong className="text-[var(--tv-ink)]">{filtered.length}</strong> of{" "}
+      {allDrafts.length} drafts
+    </p>
+  </div>
+)}
       {drafts === null && (
         <div className="grid gap-6 lg:grid-cols-5">
           <div className="space-y-3 lg:col-span-2">
@@ -418,6 +505,18 @@ export default function ReviewPage() {
       {drafts !== null && filtered.length === 0 && !error && (
         <div className="rounded-2xl border border-dashed border-[var(--tv-edge)] bg-white/80 p-6 text-sm">
           No drafts match this filter.{" "}
+          {(filter !== "ALL" || statusFilter !== "ALL") && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilter("ALL");
+                setStatusFilter("ALL");
+              }}
+              className="mr-3 font-semibold text-[var(--tv-brand)] underline"
+            >
+              Reset filters
+            </button>
+          )}
           <Link href="/dashboard/submit" className="font-semibold text-[var(--tv-brand)] underline">
             Check a new draft
           </Link>
@@ -486,12 +585,22 @@ export default function ReviewPage() {
                         </span>
                       </div>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--tv-muted)]">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--tv-muted)]">
                         <span className="rounded-md bg-[var(--tv-paper)] px-2 py-0.5 font-medium text-[var(--tv-ink)]">
                           {d.channel ?? "No channel"}
                         </span>
                         <span>&middot;</span>
                         <span>{d.total_findings ?? 0} findings</span>
+                        {(() => {
+                          const meta = statusPillMeta[getStatusBucket(d.status)];
+                          return (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.className}`}
+                            >
+                              {meta.label}
+                            </span>
+                          );
+                        })()}
                         {d.handover_to_manager === 1 && (
                           <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
                             With manager
@@ -807,8 +916,7 @@ export default function ReviewPage() {
                             })}
                           </div>
                         )}
-
-                        {/* Reviewer Notes & Decision History */}
+{/* Reviewer Notes & Decision History */}
                         {detail?.history && detail.history.length > 0 && (
                           <div className="rounded-2xl border border-[var(--tv-line)] bg-[var(--tv-paper)]/60 p-4">
                             <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]">
@@ -854,63 +962,74 @@ export default function ReviewPage() {
                       </>
                     )}
 
-                    {/* Reviewer Decision Controls */}
-                    <div className="rounded-2xl border border-[var(--tv-line)] bg-[#fcf9f3] p-4">
-                      <label
-                        htmlFor="review-note"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]"
-                      >
-                        <MessageSquareWarning className="h-3.5 w-3.5 text-[var(--tv-brand)]" />
-                        Reviewer note / dismissal reason
-                      </label>
-                      <textarea
-                        id="review-note"
-                        rows={2}
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
-                        placeholder="Optional approval note, or reason for requesting changes..."
-                        className="mt-2 w-full rounded-xl border border-[var(--tv-line)] bg-white p-3 text-sm outline-none focus:border-[var(--tv-brand)]"
-                      />
-
-                      <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
-                        <motion.button
-                          type="button"
-                          whileHover={!submitting ? { y: -1 } : undefined}
-                          whileTap={!submitting ? { scale: 0.97 } : undefined}
-                          disabled={submitting}
-                          onClick={() => recordDecision("approved")}
-                          className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1f6b3a] px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-[#17522c] disabled:opacity-60 sm:w-auto sm:py-2"
+                    {/* Reviewer Decision Controls (Locked for Creators) */}
+                    {isReviewer ? (
+                      <div className="rounded-2xl border border-[var(--tv-line)] bg-[#fcf9f3] p-4">
+                        <label
+                          htmlFor="review-note"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--tv-muted)]"
                         >
-                          <Check className="h-4 w-4" />
-                          <span>Approve draft</span>
-                        </motion.button>
-                        <motion.button
-                          type="button"
-                          whileHover={!submitting ? { y: -1 } : undefined}
-                          whileTap={!submitting ? { scale: 0.97 } : undefined}
-                          disabled={submitting}
-                          onClick={() => recordDecision("changes_requested")}
-                          className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--tv-brand)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--tv-brand)] transition hover:bg-[var(--tv-paper)] disabled:opacity-60 sm:w-auto sm:py-2"
-                        >
-                          <Sparkles className="h-4 w-4" />
-                          <span>Request changes</span>
-                        </motion.button>
-                      </div>
+                          <MessageSquareWarning className="h-3.5 w-3.5 text-[var(--tv-brand)]" />
+                          Reviewer note / dismissal reason
+                        </label>
+                        <textarea
+                          id="review-note"
+                          rows={2}
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                          placeholder="Optional approval note, or reason for requesting changes..."
+                          className="mt-2 w-full rounded-xl border border-[var(--tv-line)] bg-white p-3 text-sm outline-none focus:border-[var(--tv-brand)]"
+                        />
 
-                      <AnimatePresence>
-                        {decisionMsg && (
-                          <motion.p
-                            role="status"
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="mt-3 rounded-xl border border-[var(--tv-champagne)] bg-white p-3 text-xs font-medium text-[var(--tv-ink)]"
+                        <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
+                          <motion.button
+                            type="button"
+                            whileHover={!submitting ? { y: -1 } : undefined}
+                            whileTap={!submitting ? { scale: 0.97 } : undefined}
+                            disabled={submitting}
+                            onClick={() => recordDecision("approved")}
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1f6b3a] px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-[#17522c] disabled:opacity-60 sm:w-auto sm:py-2"
                           >
-                            {decisionMsg}
-                          </motion.p>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                            <Check className="h-4 w-4" />
+                            <span>Approve draft</span>
+                          </motion.button>
+                          <motion.button
+                            type="button"
+                            whileHover={!submitting ? { y: -1 } : undefined}
+                            whileTap={!submitting ? { scale: 0.97 } : undefined}
+                            disabled={submitting}
+                            onClick={() => recordDecision("changes_requested")}
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--tv-brand)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--tv-brand)] transition hover:bg-[var(--tv-paper)] disabled:opacity-60 sm:w-auto sm:py-2"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            <span>Request changes</span>
+                          </motion.button>
+                        </div>
+
+                        <AnimatePresence>
+                          {decisionMsg && (
+                            <motion.p
+                              role="status"
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0 }}
+                              className="mt-3 rounded-xl border border-[var(--tv-champagne)] bg-white p-3 text-xs font-medium text-[var(--tv-ink)]"
+                            >
+                              {decisionMsg}
+                            </motion.p>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--tv-line)] bg-[#fcf9f3] p-4 text-xs text-[var(--tv-muted)]">
+                        <Lock className="h-4 w-4 shrink-0 text-[var(--tv-brand)]" />
+                        <span>
+                          Approval &amp; change-request controls are locked for{" "}
+                          <strong>{user.role}</strong> accounts. Sign in as a{" "}
+                          <strong>Reviewer</strong> to make a final decision.
+                        </span>
+                      </div>
+                    )}
 
                     {/* Real Proof-of-Approval Badge from res.badge.badge_code */}
                     {badge?.badge_code && (

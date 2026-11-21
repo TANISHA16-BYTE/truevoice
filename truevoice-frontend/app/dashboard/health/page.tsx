@@ -8,10 +8,12 @@ import {
   Check,
   Edit3,
   Loader2,
+  Lock,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/SessionContext";
 
 type RuleMetric = {
   id?: string;
@@ -61,6 +63,8 @@ function useCountUp(target: number, enabled: boolean, duration = 900): number {
 }
 
 export default function GuidelineHealthPage() {
+  const { user } = useSession();
+  const isAdmin = (user?.role ?? "").toLowerCase() === "admin";
   const [data, setData] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingRef, setEditingRef] = useState<string | null>(null);
@@ -87,6 +91,7 @@ export default function GuidelineHealthPage() {
   }, []);
 
   async function saveClearerWording(rule: RuleMetric) {
+    if (!isAdmin) return;
     const nextText = draftWording.trim();
     if (!nextText) return;
     setSaving(true);
@@ -414,57 +419,64 @@ export default function GuidelineHealthPage() {
                         )}
                       </AnimatePresence>
 
-                      <AnimatePresence mode="wait">
-                        {isEditing ? (
-                          <motion.div
-                            key="editor"
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.22, ease: EDITORIAL_EASE }}
-                            className="mt-3 space-y-2 overflow-hidden"
-                          >
-                            <textarea
-                              rows={3}
-                              value={draftWording}
-                              onChange={(e) => setDraftWording(e.target.value)}
-                              className="w-full rounded-xl border border-[var(--tv-brand)] bg-[#fcf9f3] p-2.5 text-xs outline-none"
-                            />
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                disabled={saving}
-                                onClick={() => saveClearerWording(r)}
-                                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--tv-brand)] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto"
-                              >
-                                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                                <span>{saving ? "Saving…" : "Save to library"}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingRef(null)}
-                                className="w-full rounded-lg border border-[var(--tv-line)] bg-white px-3 py-1.5 text-xs sm:w-auto"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </motion.div>
-                        ) : (
-                          <motion.button
-                            key="btn"
-                            type="button"
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => {
-                              setEditingRef(r.rule_ref);
-                              setDraftWording(r.current_wording ?? "");
-                            }}
-                            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--tv-brand)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] sm:w-auto"
-                          >
-                            <Edit3 className="h-3.5 w-3.5" />
-                            <span>Draft clearer wording</span>
-                          </motion.button>
-                        )}
-                      </AnimatePresence>
+                      {isAdmin ? (
+                        <AnimatePresence mode="wait">
+                          {isEditing ? (
+                            <motion.div
+                              key="editor"
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.22, ease: EDITORIAL_EASE }}
+                              className="mt-3 space-y-2 overflow-hidden"
+                            >
+                              <textarea
+                                rows={3}
+                                value={draftWording}
+                                onChange={(e) => setDraftWording(e.target.value)}
+                                className="w-full rounded-xl border border-[var(--tv-brand)] bg-[#fcf9f3] p-2.5 text-xs outline-none"
+                              />
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() => saveClearerWording(r)}
+                                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--tv-brand)] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60 sm:w-auto"
+                                >
+                                  {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                  <span>{saving ? "Saving…" : "Save to library"}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingRef(null)}
+                                  className="w-full rounded-lg border border-[var(--tv-line)] bg-white px-3 py-1.5 text-xs sm:w-auto"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </motion.div>
+                          ) : (
+                            <motion.button
+                              key="btn"
+                              type="button"
+                              whileTap={{ scale: 0.97 }}
+                              onClick={() => {
+                                setEditingRef(r.rule_ref);
+                                setDraftWording(r.current_wording ?? "");
+                              }}
+                              className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--tv-brand)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--tv-brand-ink)] sm:w-auto"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                              <span>Draft clearer wording</span>
+                            </motion.button>
+                          )}
+                        </AnimatePresence>
+                      ) : (
+                        <p className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--tv-line)] bg-[var(--tv-paper)]/70 px-2.5 py-1 text-[11px] font-medium text-[var(--tv-muted)]">
+                          <Lock className="h-3 w-3 text-[var(--tv-brand)]" />
+                          Admin only: sign in as an Admin to rewrite guideline rules.
+                        </p>
+                      )}
                     </div>
                   );
                 })}

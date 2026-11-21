@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { Check, CheckCircle2, Clock, Loader2, Lock } from "lucide-react";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/SessionContext";
 
 type LibraryItem = {
   id: string;
@@ -42,6 +43,8 @@ function formatShortDate(dateStr?: string): string {
 }
 
 export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
+  const { user } = useSession();
+  const isAdmin = (user?.role ?? "").toLowerCase() === "admin";
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -95,6 +98,7 @@ export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
   ).length;
 
   async function markRechecked(id: string) {
+    if (!isAdmin) return;
     const today = new Date().toISOString().slice(0, 10);
     setSavingId(id);
     setError(null);
@@ -269,29 +273,35 @@ export function StaleFactAlerts({ maxAgeDays = 60 }: { maxAgeDays?: number }) {
                       )}
                     </div>
                   </div>
-
-                  <motion.button
-                    type="button"
-                    whileTap={!isChecked && !isSaving ? { scale: 0.95 } : undefined}
-                    disabled={isSaving || isChecked}
-                    onClick={() => markRechecked(item.id)}
-                    className={`inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 font-semibold transition-all duration-200 sm:w-auto ${
-                      isChecked
-                        ? "bg-[#1f6b3a] text-white"
-                        : "bg-[var(--tv-brand)] text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60"
-                    }`}
-                  >
-                    {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {isChecked && <Check className="h-3.5 w-3.5" />}
-                    <span>
-                      {isChecked
-                        ? "Re-checked"
-                        : isSaving
-                          ? "Updating…"
-                          : "Mark re-checked today"}
-                    </span>
-                  </motion.button>
-                </motion.li>
+                  {isAdmin ? (
+                 <motion.button
+                   type="button"
+                   whileTap={!isChecked && !isSaving ? { scale: 0.95 } : undefined}
+                   disabled={isSaving || isChecked}
+                   onClick={() => markRechecked(item.id)}
+                   className={`inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 font-semibold transition-all duration-200 sm:w-auto ${
+                     isChecked
+                       ? "bg-[#1f6b3a] text-white"
+                       : "bg-[var(--tv-brand)] text-white hover:bg-[var(--tv-brand-ink)] disabled:opacity-60"
+                   }`}
+                 >
+                   {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                   {isChecked && <Check className="h-3.5 w-3.5" />}
+                   <span>
+                     {isChecked
+                       ? "Re-checked"
+                       : isSaving
+                         ? "Updating…"
+                         : "Mark re-checked today"}
+                   </span>
+                 </motion.button>
+               ) : (
+                 <span className="inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[var(--tv-line)] bg-[var(--tv-paper)] px-3 py-1.5 text-[11px] font-medium text-[var(--tv-muted)] sm:w-auto">
+                   <Lock className="h-3 w-3 text-[var(--tv-brand)]" />
+                   Admin re-check required
+                 </span>
+                 )}
+               </motion.li>
               );
             })}
           </AnimatePresence>
