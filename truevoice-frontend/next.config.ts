@@ -7,6 +7,17 @@ const backend = process.env.TRUEVOICE_BACKEND_URL ?? "http://localhost:8000";
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.1.9", "192.168.1.9:3000", "localhost", "localhost:3000"],
 
+  // Send crawlers and visitors to the canonical public product page at the edge.
+  async redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/discover.html",
+        permanent: true,
+      },
+    ];
+  },
+
   // Turns Tailwind on. Do not remove this block.
   turbopack: {
     rules: {
