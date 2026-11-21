@@ -232,3 +232,33 @@ Round 3 upgrades TrueVoice from an initial compliance prototype into a productio
 ### 8. Production Database, Deployment & SEO Hardening
 - **Async PostgreSQL backend:** Migrated and synced all Round 3 endpoints to PostgreSQL (`migration/postgresql-supabase`) on **Render**, preserving both SQLite (local/tests) and hosted PostgreSQL compatibility.
 - **Frontend & SEO:** Deployed the Next.js frontend on **Vercel** with a dynamic `sitemap`, crawler rules, and search metadata configured for the custom domain.
+
+
+## 🌍 Public Website, SEO & Search Discovery
+
+The public-facing TrueVoice website is available at **https://www.thetruevoice.xyz/**. The product workspace remains behind authentication; visitors can explore the public Discover page before signing in.
+
+### Public entry point
+- **Public Discover page:** [https://www.thetruevoice.xyz/discover.html](https://www.thetruevoice.xyz/discover.html) — the public product overview and entry point for visitors.
+- **Root route:** `/` is configured to redirect to `/discover.html` using a temporary redirect, so the public landing page is the intended homepage rather than the private dashboard.
+- **Authentication boundary:** Login and signup remain the entry points to the private workspace. Authenticated users may be routed to their dashboard after signing in; this is separate from the public landing-page route.
+
+### SEO and crawler updates
+- Added/updated page metadata, including the public page title, description, canonical URL, and social sharing metadata.
+- Added structured product information (JSON-LD) to help search engines understand the public product page.
+- Updated `robots.txt` to make public content crawlable while keeping private workspace routes and backend/API paths out of crawler discovery.
+- Added/updated `llms.txt` with a concise description of TrueVoice for AI-assisted discovery.
+- Preserved the Google Search Console domain-verification meta tag in the site metadata. The verification token is intentionally not repeated in this README.
+
+### Implementation history
+- **PR #36** — public homepage routing, metadata improvements, crawler rules, and `llms.txt` updates.
+- **PR #37** — root redirect configuration in `next.config.ts`.
+- **PR #38** — changed the root redirect from permanent to temporary while validating production routing, avoiding a long-lived permanent redirect being cached during troubleshooting.
+
+### Verification status
+- The public Discover URL has been confirmed to load.
+- The root-route behavior on the live custom domain and successful indexing in Google Search Console have **not yet been independently confirmed**. Code being merged does not by itself prove that production has deployed or that Google has indexed the page.
+- The sitemap was not changed as part of this work.
+
+---
+
