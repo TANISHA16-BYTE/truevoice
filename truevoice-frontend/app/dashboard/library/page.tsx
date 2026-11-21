@@ -297,7 +297,7 @@ type Result = { tab: string; items: Item[]; error: string | null };
 
 export default function LibraryPage() {
   const { user } = useSession();
-  const canEdit = user?.role === "reviewer" || user?.role === "admin";
+  const canEdit = user?.role === "admin";
 
   const [tab, setTab] = useState("facts");
   const [query, setQuery] = useState("");
@@ -727,7 +727,7 @@ export default function LibraryPage() {
                 </h2>
                 <p className="mt-1 text-xs text-[var(--tv-muted)] sm:text-sm">
                   Upload a PDF, DOCX, PPTX, TXT, or Markdown brand update (max 3 MB). Nothing enters
-                  the approved library until a reviewer checks and approves each item.
+                  the approved library until an admin checks and approves each item.
                 </p>
               </div>
               <button
@@ -1508,8 +1508,8 @@ export default function LibraryPage() {
 
       <p className="mt-8 text-sm text-[var(--tv-muted)]">
         {canEdit
-          ? "Reviewers and admins can add, edit, archive, verify sources, refine rule wording, or import a Brand Guide PDF for checklist approval."
-          : "Logged in as Creator — only Reviewers and Admins can edit or import items into the approved library."}
+          ? "Signed in as Admin — you can add, edit, archive, verify sources, refine rule wording, and approve Brand Guide PDF imports into the library."
+          : `Signed in as ${user?.role || "member"} — only Admins can edit, archive, or approve changes in the approved library.`}
       </p>
     </div>
   );
