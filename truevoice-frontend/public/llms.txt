@@ -38,9 +38,9 @@ TrueVoice is designed for teams that create, review, or approve content across e
 
 ## Public pages
 
-- Product overview: https://truevoice-devvibe.vercel.app/discover.html
-- Sitemap: https://truevoice-devvibe.vercel.app/sitemap.xml
-- Robots policy: https://truevoice-devvibe.vercel.app/robots.txt
+- Product overview: https://www.thetruevoice.xyz/discover.html
+- Sitemap: https://www.thetruevoice.xyz/sitemap.xml
+- Robots policy: https://www.thetruevoice.xyz/robots.txt
 
 ## Project
 
