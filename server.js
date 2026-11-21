@@ -238,6 +238,10 @@ const server = http.createServer(async (req, res) => {
       const resp = await draftsCtrl.getDraftDetails(draftDetailMatch[1], currentUser);
       return sendJson(res, resp.status, resp.data);
     }
+    if (draftDetailMatch && (method === "PATCH" || method === "PUT")) {
+      const resp = await draftsCtrl.resubmitDraft(draftDetailMatch[1], body, currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
 
     const explainMatch = pathname.match(/^\/api\/drafts\/([A-Za-z0-9_]+)\/findings\/([A-Za-z0-9_]+)\/explain$/);
     if (explainMatch && method === "POST") {

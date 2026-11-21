@@ -495,10 +495,121 @@ async function decideDraft(draftId, body, user) {
   return failure(400, "Invalid action. Use 'approved' or 'changes_requested'.");
 }
 
+async function resubmitDraft(draftId, body, user) {
+  const access = await findAuthorizedDraft(draftId, user, ["creator"]);
+  if (access.error) return access.error;
+
+  const existing = access.draft;
+  const existingBadge = await db.get(
+    "SELECT id FROM approval_badges WHERE draft_id = ? LIMIT 1",
+    [draftId]
+  );
+  if (existing.status === "approved" || existingBadge) {
+    return failure(409, "Approved drafts cannot be edited. Submit a new draft instead.");
+  }
+
+  const {
+    title,
+    content,
+    text,
+    channel,
+    scheduled_for,
+    product_code
+  } = body || {};
+
+  const draftContent =
+    typeof content === "string" && content.trim() ? content : text;
+
+  if (!draftContent || typeof draftContent !== "string" || !draftContent.trim()) {
+    return failure(400, "Draft content is required.");
+  }
+
+  const nextTitle =
+    typeof title === "string" && title.trim() ? title.trim() : existing.title;
+  const nextChannel =
+    typeof channel === "string" && channel.trim() ? channel.trim() : existing.channel;
+  const nextScheduledFor =
+    scheduled_for !== undefined ? (scheduled_for || null) : existing.scheduled_for;
+  const nextProductCode =
+    product_code !== undefined ? product_code : existing.product_code;
+
+  const now = new Date().toISOString();
+  const checkResult = await runCheckPipeline({
+    text: draftContent,
+    title: nextTitle,
+    channel: nextChannel,
+    scheduled_for: nextScheduledFor,
+    product_code: nextProductCode,
+    creator_id: user.id
+  });
+
+  await db.run(
+    "UPDATE drafts SET title = ?, content = ?, channel = ?, scheduled_for = ?, product_code = ?, status = 'submitted', risk_level = ?, handover_to_manager = FALSE, manager_handover_reason = NULL, updated_at = ? WHERE id = ?",
+    [
+      nextTitle,
+      draftContent,
+      nextChannel,
+      nextScheduledFor,
+      nextProductCode,
+      checkResult.risk_level,
+      now,
+      draftId
+    ]
+  );
+
+  await db.run("DELETE FROM findings WHERE draft_id = ?", [draftId]);
+
+  for (const f of checkResult.findings) {
+    await db.run(
+      "INSERT INTO findings (id, draft_id, type, severity, flagged_text, rule_ref, source_id, reason, suggested_fix, confidence, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+      [
+        f.id,
+        draftId,
+        f.type,
+        f.severity,
+        f.flagged_text,
+        f.rule_ref,
+        f.source_id,
+        f.reason,
+        f.suggested_fix,
+        f.confidence || 1.0,
+        now
+      ]
+    );
+  }
+
+  await logHistory(
+    draftId,
+    user.id,
+    user.name,
+    "RESUBMITTED",
+    "Draft edited and resubmitted with " +
+      checkResult.findings.length +
+      " findings. Risk level: " +
+      checkResult.risk_level
+  );
+
+  return {
+    status: 200,
+    data: {
+      id: draftId,
+      draft_id: draftId,
+      title: nextTitle,
+      channel: nextChannel,
+      status: "submitted",
+      risk_level: checkResult.risk_level,
+      findings_count: checkResult.findings.length,
+      findings: checkResult.findings,
+      summary: checkResult.summary
+    }
+  };
+}
+
 module.exports = {
   createDraft,
   listDrafts,
   getDraftDetails,
+  resubmitDraft,
   explainFinding,
   handoverToManager,
   dismissFinding,
