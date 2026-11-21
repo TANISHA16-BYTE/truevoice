@@ -14,6 +14,7 @@ const healthCtrl = require("./src/controllers/healthController");
 const mistakesCtrl = require("./src/controllers/mistakesController");
 const uploadCtrl = require("./src/controllers/uploadController");
 const auditCtrl = require("./src/controllers/auditController");
+const usersCtrl = require("./src/controllers/usersController");
 const { listScheduledPosts } = require("./src/services/scheduleClashService");
 const { generateQRCodeSVG } = require("./src/services/qrService");
 const { getOpenApiSpec, getSwaggerHtml } = require("./src/services/docsService");
@@ -95,6 +96,9 @@ const server = http.createServer(async (req, res) => {
         docs_url: config.BASE_URL + "/docs",
         endpoints: [
           "GET  /docs (Interactive Swagger UI)",
+          "GET  /api/users (Admin only)",
+          "POST /api/users (Admin only)",
+          "PATCH /api/users/:id/role (Admin only)",
           "POST /api/auth/login",
           "GET  /api/auth/me",
           "POST /api/check",
@@ -160,6 +164,8 @@ const server = http.createServer(async (req, res) => {
       pathname === "/api/clash/posts" ||
       pathname === "/api/ai-mistakes" ||
       pathname === "/api/audit-logs/export" ||
+      pathname === "/api/users" ||
+      pathname.startsWith("/api/users/") ||
       pathname === "/api/library/import-pdf" ||
       (pathname.startsWith("/api/library/") && method === "PATCH");
 
@@ -178,6 +184,23 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 403, {
         error: "Reviewer or admin permission required."
       });
+    }
+
+    // ----------------------------------------------------
+    // Admin Team & Role Management Routes
+    // ----------------------------------------------------
+    if (pathname === "/api/users" && method === "GET") {
+      const resp = usersCtrl.listUsers(currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
+    if (pathname === "/api/users" && method === "POST") {
+      const resp = usersCtrl.createTeamUser(body, currentUser);
+      return sendJson(res, resp.status, resp.data);
+    }
+    const userRoleMatch = pathname.match(/^\/api\/users\/([A-Za-z0-9_-]+)\/role$/);
+    if (userRoleMatch && method === "PATCH") {
+      const resp = usersCtrl.updateUserRole(userRoleMatch[1], body, currentUser);
+      return sendJson(res, resp.status, resp.data);
     }
 
     // ----------------------------------------------------

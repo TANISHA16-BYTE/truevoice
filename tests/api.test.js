@@ -679,8 +679,81 @@ async function runApiTests() {
     }
     console.log("  -> Passed. Admin-only role guard (403 for creator & reviewer) & checklist extraction (" + adminImport.data.items.length + " items) succeeded.");
 
+
+    // TEST 34: Admin Team & Role Management (GET /api/users, PATCH /api/users/:id/role, POST /api/users)
+    console.log("\n[TEST 34] Admin Team & Role Management & Self-Demotion Guard...");
+    const noAuthUsers = await invokeRoute("GET", "/api/users");
+    if (noAuthUsers.status !== 401) {
+      throw new Error("Expected 401 for unauthenticated GET /api/users, got " + noAuthUsers.status);
+    }
+    const creatorUsers = await invokeRoute("GET", "/api/users", {
+      authorization: "Bearer " + creatorToken
+    });
+    if (creatorUsers.status !== 403) {
+      throw new Error("Expected 403 for creator GET /api/users, got " + creatorUsers.status);
+    }
+    const reviewerUsers = await invokeRoute("GET", "/api/users", {
+      authorization: "Bearer " + reviewerToken
+    });
+    if (reviewerUsers.status !== 403) {
+      throw new Error("Expected 403 for reviewer GET /api/users, got " + reviewerUsers.status);
+    }
+    const adminUsersList = await invokeRoute("GET", "/api/users", {
+      authorization: "Bearer " + adminToken
+    });
+    if (
+      adminUsersList.status !== 200 ||
+      !Array.isArray(adminUsersList.data.users) ||
+      adminUsersList.data.users.length < 3 ||
+      adminUsersList.data.users.some((u) => Object.prototype.hasOwnProperty.call(u, "password_hash"))
+    ) {
+      throw new Error("GET /api/users failed or leaked password_hash: " + JSON.stringify(adminUsersList.data));
+    }
+    const selfUser = adminUsersList.data.users.find((u) => u.email === "manager@glowvale.demo");
+    const selfDemote = await invokeRoute(
+      "PATCH",
+      "/api/users/" + selfUser.id + "/role",
+      { "content-type": "application/json", authorization: "Bearer " + adminToken },
+      { role: "creator" }
+    );
+    if (selfDemote.status !== 400) {
+      throw new Error("Expected 400 preventing admin self-demotion, got " + selfDemote.status);
+    }
+    const teammateEmail = "teammate_" + Date.now() + "@glowvale.demo";
+    const onboardRes = await invokeRoute(
+      "POST",
+      "/api/users",
+      { "content-type": "application/json", authorization: "Bearer " + adminToken },
+      { name: "Nupur Demo", email: teammateEmail, password: "Password123", role: "creator" }
+    );
+    if (onboardRes.status !== 201 || onboardRes.data.user?.role !== "creator") {
+      throw new Error("POST /api/users onboarding failed: " + JSON.stringify(onboardRes.data));
+    }
+    const promoteRes = await invokeRoute(
+      "PATCH",
+      "/api/users/" + onboardRes.data.user.id + "/role",
+      { "content-type": "application/json", authorization: "Bearer " + adminToken },
+      { role: "reviewer" }
+    );
+    if (promoteRes.status !== 200 || promoteRes.data.user?.role !== "reviewer") {
+      throw new Error("PATCH /api/users/:id/role failed: " + JSON.stringify(promoteRes.data));
+    }
+    const teammateLogin = await invokeRoute(
+      "POST",
+      "/api/auth/login",
+      { "content-type": "application/json" },
+      { email: teammateEmail, password: "Password123" }
+    );
+    const promotedAccess = await invokeRoute("GET", "/api/ai-mistakes", {
+      authorization: "Bearer " + teammateLogin.data.token
+    });
+    if (promotedAccess.status !== 200) {
+      throw new Error("Promoted reviewer should immediately access GET /api/ai-mistakes, got " + promotedAccess.status);
+    }
+    console.log("  -> Passed. Admin list/onboard/promote & self-demotion guard verified.");
+
     console.log("\n=======================================================");
-    console.log("   ALL 33 INTEGRATION TESTS PASSED");
+    console.log("   ALL 34 INTEGRATION TESTS PASSED");
     console.log("=======================================================\n");
 
     process.exit(0);
