@@ -12,6 +12,9 @@ const serif = Source_Serif_4({ subsets: ["latin"], variable: "--font-serif" });
 export const metadata: Metadata = {
   title: "TrueVoice",
   description: "Check content against approved facts before it goes public.",
+  verification: {
+    google: "PeX4XooZbbHyb5ya6t0KBB0m4_y3XSVwoavy_tRaM9g",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
