@@ -191,7 +191,8 @@ function getDraftDetails(draftId, user) {
     [draftId]
   );
   const badge = db.get(
-    "SELECT * FROM approval_badges WHERE draft_id = ?", [draftId]
+    "SELECT * FROM approval_badges WHERE draft_id = ? AND is_revoked = 0 ORDER BY approved_at DESC LIMIT 1",
+    [draftId]
   );
 
   return {
@@ -396,7 +397,7 @@ function approveDraft(draftId, body, user) {
 
   // Prevent generating multiple approval badges for the same draft.
   const existingBadge = db.get(
-    "SELECT * FROM approval_badges WHERE draft_id = ? LIMIT 1",
+    "SELECT * FROM approval_badges WHERE draft_id = ? AND is_revoked = 0 ORDER BY approved_at DESC LIMIT 1",
     [draftId]
   );
 
@@ -458,6 +459,27 @@ function requestChanges(draftId, body, user) {
     "Please address flagged findings";
   const now = new Date().toISOString();
 
+  const activeBadges = db.query(
+    "SELECT badge_code FROM approval_badges WHERE draft_id = ? AND is_revoked = 0",
+    [draftId]
+  );
+
+  if (activeBadges.length > 0) {
+    db.run(
+      "UPDATE approval_badges SET is_revoked = 1 WHERE draft_id = ? AND is_revoked = 0",
+      [draftId]
+    );
+    for (const b of activeBadges) {
+      logHistory(
+        draftId,
+        user.id,
+        user.name,
+        "APPROVAL_REVOKED",
+        `Revoked approval badge ${b.badge_code}: ${notes}`
+      );
+    }
+  }
+
   db.run(
     "UPDATE drafts SET status = 'changes_requested', updated_at = ? WHERE id = ?",
     [now, draftId]
@@ -469,7 +491,11 @@ function requestChanges(draftId, body, user) {
     data: {
       success: true,
       status: "changes_requested",
-      message: "Changes requested from creator.",
+      revoked_badges: activeBadges.map((b) => b.badge_code),
+      message:
+        activeBadges.length > 0
+          ? "Approval revoked and changes requested from creator."
+          : "Changes requested from creator.",
       notes
     }
   };
@@ -498,7 +524,7 @@ async function resubmitDraft(draftId, body, user) {
 
   const existing = access.draft;
   const existingBadge = db.get(
-    "SELECT id FROM approval_badges WHERE draft_id = ? LIMIT 1",
+    "SELECT id FROM approval_badges WHERE draft_id = ? AND is_revoked = 0 LIMIT 1",
     [draftId]
   );
   if (existing.status === "approved" || existingBadge) {

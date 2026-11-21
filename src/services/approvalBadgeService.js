@@ -18,7 +18,7 @@ function createApprovalBadge({ draftId, content, approvedBy, reviewerName }) {
   const badgeCode = "TV-APPR-" + crypto.randomBytes(3).toString("hex").toUpperCase();
   const approvedAt = new Date().toISOString();
   const publicUrl = config.BASE_URL + "/verify/" + badgeCode;
-  const id = "badge_" + Date.now();
+  const id = "badge_" + Date.now() + "_" + crypto.randomBytes(2).toString("hex");
 
   db.run(
     "INSERT INTO approval_badges (id, draft_id, badge_code, content_hash, approved_by, reviewer_name, approved_at, public_url, is_revoked, snapshot_content, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
@@ -60,6 +60,7 @@ function verifyBadgeAndContent(badgeCode, submittedContent = null) {
   if (badge.is_revoked === 1) {
     return {
       found: true,
+      badge_code: badge.badge_code,
       is_revoked: true,
       message: "This approval badge has been revoked.",
       approved_at: badge.approved_at,
