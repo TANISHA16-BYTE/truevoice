@@ -1,8 +1,10 @@
 # TrueVoice 🛡️
 
+🌐 **Live Website:** [https://www.thetruevoice.xyz/](https://www.thetruevoice.xyz/)
+
 ## 🌐 Live Deployment
 
-**TrueVoice Web App:** https://truevoice-devvibe.vercel.app
+**TrueVoice Web App:** https://www.thetruevoice.xyz/
 
 > **"Check it before you publish it. Every finding shows its source. A human decides."**
 
