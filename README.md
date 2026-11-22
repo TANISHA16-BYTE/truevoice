@@ -1,10 +1,10 @@
 # TrueVoice 🛡️
 
-🌐 **Live Website:** [https://www.thetruevoice.xyz/](https://www.thetruevoice.xyz/)
+🌐 **Public Website:** [https://www.thetruevoice.xyz/](https://www.thetruevoice.xyz/)  \n\n🔐 **Workspace Dashboard:** [https://www.thetruevoice.xyz/dashboard](https://www.thetruevoice.xyz/dashboard) (sign-in required)
 
 ## 🌐 Live Deployment
 
-**TrueVoice Web App:** https://www.thetruevoice.xyz/
+**Public Website:** https://www.thetruevoice.xyz/  \n**Workspace Dashboard:** https://www.thetruevoice.xyz/dashboard
 
 > **"Check it before you publish it. Every finding shows its source. A human decides."**
 
